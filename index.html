@@ -1,0 +1,1199 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b1524">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="반발경도">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>반발경도 강도산정</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 레이아웃: 회사 머리띠(로고) → 파일 바 → 공통조건 → 결과 요약 → 측정점 카드. 인쇄 시에는 엑셀 양식(3개/쪽)만 출력 */
+/* B안 블루프린트 다크 (PC · 앱 공통, 한 가지 색) */
+:root{
+  --bg:#0e1a2b; --panel:#13243a; --ink:#dce8f5; --muted:#8aa3bd; --line:#2c4560; --soft:#1a2e47;
+  --accent:#7cc4ff; --accent-soft:rgba(124,196,255,.14); --accent-ink:#0e1a2b;
+  --ok:#6fe3a6; --ok-soft:rgba(111,227,166,.14); --warn:#ffd166; --warn-soft:rgba(255,209,102,.13); --bad:#ff8a80; --bad-soft:rgba(255,138,128,.14);
+  --excl:#5d7590;
+  --hammer:#dce8f5; --tip:#7cc4ff; --conc:#4a5d72; --conc-line:#6e8399; --arrow:#ffd166;
+  --f-body:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  --f-num:"JetBrains Mono",Consolas,"D2Coding","Roboto Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background-color:var(--bg);background-image:linear-gradient(rgba(124,196,255,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(124,196,255,.06) 1px,transparent 1px);background-size:20px 20px;color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.label{font-size:11.5px;color:var(--muted);letter-spacing:.03em;font-weight:600}
+/* 회사 머리띠 */
+.brand{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:12px 16px;border-bottom:3px solid var(--accent)}
+.brand .title{display:flex;flex-direction:column;align-items:flex-end;text-align:right}
+@media (max-width:560px){ .brand .title{align-items:flex-start;text-align:left} }
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px}
+.filebar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;padding:14px 16px}
+.filebar .field.grow{flex:2 1 300px}
+.filebar .field.mid{flex:1 1 200px}
+.filebar .field input{font-family:var(--f-body);font-size:15px;font-weight:600}
+.fileinfo{font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%}
+.dirty{color:var(--warn);font-weight:600}
+.cond{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;padding:16px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+input,select{font:inherit}
+.field input,.field select{font-family:var(--f-num);padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--panel);color:var(--ink);width:100%}
+input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+input.need{border-color:var(--warn);background:var(--warn-soft)}
+.agebox{background:var(--accent-soft);border-radius:4px;padding:8px 10px;display:flex;flex-direction:column;justify-content:center}
+.agebox b{font-family:var(--f-num);font-size:18px;color:var(--accent)}
+.btn{font:inherit;font-size:13px;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08);color:var(--accent-ink)}
+.btn.on{background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+.btn.ghost{border-color:transparent;color:var(--muted);padding:4px 8px}
+.btn.ghost:hover{color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:12.5px}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sumhead{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:14px 16px 10px}
+.kpis{display:flex;gap:22px;flex-wrap:wrap}
+.kpi .v{font-family:var(--f-num);font-size:20px;font-weight:600}
+.tablewrap{overflow-x:auto;border-top:1px solid var(--line)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--soft);text-align:center;white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:600;background:var(--soft)}
+td.l{text-align:left}
+td.n{font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.pill{display:inline-block;min-width:26px;padding:1px 8px;border-radius:10px;font-weight:700;font-size:12px}
+.g-a{background:var(--ok-soft);color:var(--ok)} .g-c{background:var(--warn-soft);color:var(--warn)}
+.g-d,.g-e{background:var(--bad-soft);color:var(--bad)} .g-x{background:var(--soft);color:var(--muted)}
+.pagemark td{background:var(--soft);color:var(--muted);font-size:11.5px;text-align:left;padding:3px 10px;font-weight:600}
+.points{display:flex;flex-direction:column;gap:14px}
+.card{display:grid;grid-template-columns:minmax(0,430px) minmax(0,1fr)}
+.card .left{padding:14px 16px;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:14px;min-width:0}
+.card .right{padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.cardhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cardhead .no{font-family:var(--f-num);font-weight:700;font-size:17px;color:var(--accent)}
+.cardhead .pg{font-size:11.5px;color:var(--muted);margin-left:8px;font-weight:500}
+.meta{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.meta .field input{font-family:var(--f-body);padding:6px 8px}
+.meta .field input[type=number]{font-family:var(--f-num)}
+.angles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ang{border:1.5px solid var(--line);border-radius:6px;background:var(--panel);padding:4px 4px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ink);font:inherit}
+.ang svg{width:100%;max-width:120px;height:auto;display:block}
+.ang span{font-size:12px;font-weight:600}
+.ang small{font-size:11px;color:var(--muted)}
+.ang:hover{border-color:var(--accent)}
+.ang[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.ang:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.slant{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:12px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:2px 10px;cursor:pointer}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.grid input{font-family:var(--f-num);font-size:15px;text-align:center;padding:6px 0;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--ink);width:100%;min-width:0}
+.grid input.out{color:var(--excl);text-decoration:line-through;background:var(--soft)}
+.autogen{display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap;padding:10px;background:var(--soft);border-radius:4px}
+.autogen .field{flex:1 1 90px}
+.autogen .field input{padding:5px 8px}
+.badge{font-size:11px;font-weight:600;color:var(--warn);background:var(--warn-soft);padding:1px 7px;border-radius:9px}
+.hint{font-size:12px;color:var(--muted)}
+.steps{display:grid;grid-template-columns:auto 1fr auto;gap:5px 14px;align-items:baseline;font-size:13px}
+.steps .k{color:var(--muted)}
+.steps .eq{font-family:var(--f-num);font-size:12px;color:var(--muted)}
+.steps .v{font-family:var(--f-num);font-weight:600;text-align:right}
+.result{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 12px;background:var(--accent-soft);border-radius:4px}
+.result .big{font-family:var(--f-num);font-size:26px;font-weight:700;color:var(--accent)}
+.fc3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.fc3>div{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border-right:1px solid var(--line)}
+.fc3>div:last-child{border-right:0}
+.fc3 b{font-size:17px;font-weight:600;color:var(--muted)}
+.fc3>div.on{background:var(--accent-soft)}
+.fc3>div.on b{color:var(--accent)}
+.formulas{width:100%;font-size:12.5px}
+.formulas td,.formulas th{padding:5px 8px}
+.formulas tr.used td{font-weight:600;color:var(--ink)}
+.formulas tr:not(.used) td{color:var(--muted)}
+.warn{font-size:12.5px;color:var(--warn);background:var(--warn-soft);padding:6px 10px;border-radius:4px}
+details.ref summary{cursor:pointer;padding:12px 16px;font-weight:600}
+.refbody{padding:0 16px 16px;display:flex;flex-direction:column;gap:14px;font-size:13px}
+.refbody p{margin:0;max-width:72ch}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:4px;font-size:13px;max-width:calc(100% - 32px);z-index:20}
+footer{color:var(--muted);font-size:12px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px}
+@media (max-width:760px){ .card{grid-template-columns:1fr} .card .left{border-right:0;border-bottom:1px solid var(--line)} }
+@media (max-width:420px){ .meta{grid-template-columns:1fr 1fr} .meta .field:first-child{grid-column:1/-1} }
+
+
+/* ── 앱 화면 (B안 블루프린트 다크) : 안드로이드 앱 · 휴대폰 폭에서만 ── */
+#mApp{display:none}
+body.mobile{background:#0e1a2b;padding:0}
+body.mobile .wrap{display:none}
+body.mobile #mApp{display:flex}
+#mApp{--m-bg:#0e1a2b;--m-panel:#13243a;--m-line:#2c4560;--m-ink:#dce8f5;--m-muted:#8aa3bd;--m-acc:#7cc4ff;--m-ok:#6fe3a6;--m-warn:#ffd166;--m-bad:#ff8a80;
+  --m-num:"JetBrains Mono","Roboto Mono",Consolas,monospace;
+  flex-direction:column;min-height:100vh;color:var(--m-ink);font-family:var(--f-body);color-scheme:dark;
+  background-color:var(--m-bg);background-image:linear-gradient(rgba(124,196,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(124,196,255,.07) 1px,transparent 1px);background-size:20px 20px;
+  padding-left:max(0px,env(safe-area-inset-left,0px));padding-right:max(0px,env(safe-area-inset-right,0px))}
+#mApp button{font:inherit;color:inherit;cursor:pointer}
+#mApp button:focus-visible,#mApp input:focus-visible{outline:2px solid var(--m-acc);outline-offset:1px}
+.m-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:16px 16px 10px}
+.m-eyebrow{font-family:var(--m-num);font-size:11px;letter-spacing:.12em;color:var(--m-acc)}
+.m-title{font-size:20px;font-weight:700;margin:2px 0 0}
+.m-proj{font-size:12.5px;color:var(--m-muted);background:none;border:0;padding:2px 0;text-align:left;text-decoration:underline dotted;text-underline-offset:3px}
+.m-iconbtn{width:44px;height:44px;flex:none;border:1px solid var(--m-line);border-radius:6px;background:var(--m-panel);display:flex;align-items:center;justify-content:center}
+.m-strip{margin:0 14px;border:1px solid var(--m-line);border-radius:6px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));background:rgba(14,26,43,.6);text-align:left;width:auto;padding:0}
+.m-strip>span{padding:8px;border-right:1px solid var(--m-line);display:flex;flex-direction:column;min-width:0}
+.m-strip>span:last-child{border-right:0}
+.m-strip small{font-family:var(--m-num);font-size:10px;color:var(--m-muted)}
+.m-strip b{font-family:var(--m-num);font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-body{flex:1;padding:12px 14px 96px;display:flex;flex-direction:column;gap:10px}
+.m-card{background:rgba(19,36,58,.94);border:1px solid var(--m-line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:12px;touch-action:pan-y}
+.m-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.m-no{font-family:var(--m-num);font-size:22px;font-weight:700;color:var(--m-acc)}
+.m-pos{font-size:13px;color:var(--m-muted);background:none;border:1px solid var(--m-line);border-radius:14px;padding:4px 10px}
+.m-hero{display:flex;align-items:flex-end;gap:12px}
+.m-angpic{flex:none;width:92px;display:block}
+.m-angpic svg{width:100%;height:auto;display:block;--hammer:#dce8f5;--tip:#7cc4ff;--conc:#4a5d72;--conc-line:#6e8399;--arrow:#ffd166}
+.m-big{font-family:var(--m-num);font-size:42px;font-weight:700;line-height:1.05}
+.m-big small{font-size:15px;color:var(--m-muted);font-weight:400}
+.m-verdict{font-size:12.5px;font-weight:600}
+.m-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.m-fields label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--m-muted)}
+.m-in{font:inherit;font-size:15px;color:var(--m-ink);background:var(--m-bg);border:1px solid var(--m-line);border-radius:5px;padding:8px;width:100%;min-width:0;box-sizing:border-box}
+.m-in.need{border-color:var(--m-warn)}
+.m-angles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.m-ang{height:46px;border-radius:6px;border:1px solid var(--m-line);background:transparent;color:var(--m-muted)!important;font-size:12.5px!important;line-height:1.2}
+.m-ang[aria-pressed="true"]{border-color:var(--m-acc);background:rgba(124,196,255,.16);color:var(--m-ink)!important;font-weight:700}
+.m-slant{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--m-muted)}
+.m-chip{border:1px solid var(--m-line);background:transparent;border-radius:12px;padding:3px 10px;font-size:12px!important;color:var(--m-muted)!important;font-family:var(--m-num)!important}
+.m-chip[aria-pressed="true"]{border-color:var(--m-acc);color:var(--m-acc)!important}
+.m-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}
+.m-grid input{font-family:var(--m-num);font-size:16px;text-align:center;color:var(--m-ink);background:var(--m-bg);border:0;border-bottom:1px solid var(--m-line);padding:7px 0;width:100%;min-width:0;border-radius:0}
+.m-grid input.out{color:#5d7590;text-decoration:line-through}
+.m-gen{display:flex;gap:6px;align-items:stretch}
+.m-gen .m-in{flex:1}
+.m-gen .m-in.sm{flex:0 0 64px}
+.m-btn{border:1px solid var(--m-line);background:transparent;border-radius:6px;padding:0 14px;font-weight:600;font-size:14px!important;min-height:44px}
+.m-btn.pri{background:var(--m-acc);border-color:var(--m-acc);color:#0e1a2b!important;font-weight:700}
+.m-steps{display:flex;flex-direction:column;gap:4px;font-family:var(--m-num);font-size:12px;color:var(--m-muted)}
+.m-steps div{display:flex;justify-content:space-between;gap:8px}
+.m-steps b{color:var(--m-ink);font-weight:600}
+.m-warn{font-size:12.5px;color:var(--m-warn);border:1px solid rgba(255,209,102,.35);border-radius:5px;padding:6px 8px}
+.m-dots{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+.m-dots span{width:6px;height:6px;border-radius:3px;background:var(--m-line)}
+.m-dots span.on{width:18px;background:var(--m-acc)}
+.m-nav{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--m-muted)}
+.m-foot{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:8px;background:#0b1524;border-top:1px solid var(--m-line);
+  padding:10px max(14px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px))}
+.m-foot .m-btn{flex:1;min-height:48px}
+.m-foot .m-btn.pri{flex:2}
+.m-sheet{position:fixed;inset:0;z-index:30;background:rgba(5,10,18,.6);display:flex;align-items:flex-end}
+.m-sheet[hidden]{display:none!important}
+.m-sheet>div{width:100%;max-height:85vh;overflow:auto;background:#13243a;border-top:1px solid var(--m-line);border-radius:14px 14px 0 0;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) calc(20px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:12px}
+.m-sheet h2{margin:0;font-size:16px}
+.m-menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.m-menu .m-btn{text-align:left}
+.m-list{width:100%;border-collapse:collapse;font-size:13px}
+.m-list td,.m-list th{border-bottom:1px solid var(--m-line);padding:9px 6px;text-align:left;color:var(--m-ink);background:none;white-space:nowrap}
+.m-list th{font-size:11px;color:var(--m-muted);font-weight:600}
+.m-list tr.cur td{color:var(--m-acc)}
+.m-list td.n{font-family:var(--m-num);text-align:right}
+.m-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.m-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--m-muted)}
+.m-form label.wide{grid-column:1/-1}
+.m-admin{color:var(--m-warn)!important;border-color:var(--m-warn)!important}
+@media print{ #mApp{display:none!important} body.mobile{background:#fff} }
+/* ── 관리자 비밀번호 창 ── */
+.pw{position:fixed;inset:0;z-index:50;background:rgba(10,16,24,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.pw[hidden]{display:none!important}
+.pw-box{width:100%;max-width:340px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.pw-box h2{margin:0;font-size:17px}
+.pw-box p{margin:0;font-size:13px;color:var(--muted)}
+.pw-box input{font:inherit;font-family:var(--f-num);font-size:20px;letter-spacing:.3em;text-align:center;padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.pw-msg{min-height:18px;font-size:12.5px;color:var(--bad)}
+.pw-btns{display:flex;justify-content:flex-end;gap:8px}
+.pw-btns .btn{min-height:42px;min-width:80px}
+body.mobile .pw-box{--panel:#13243a;--ink:#dce8f5;--muted:#8aa3bd;--line:#2c4560;--bg:#0e1a2b;--bad:#ff8a80;--accent:#7cc4ff;--accent-ink:#0e1a2b}
+body.mobile .pw-box .btn{background:transparent;color:#dce8f5;border-color:#2c4560}
+body.mobile .pw-box .btn.primary{background:#7cc4ff;color:#0e1a2b;border-color:#7cc4ff}
+@media print{.pw{display:none!important}}
+/* ── 인쇄 양식 (엑셀 '반발경도시험' 시트 F:O 열과 같은 배치) ── */
+#printView{display:none}
+.pv-page{width:180mm;margin:0 auto;color:#000;background:#fff;font-family:"Gulim","굴림","Dotum","돋움",var(--f-body)}
+.pv-head{font-weight:700;font-size:10pt;border-bottom:1px solid #000;padding:2mm 0 1.5mm;margin-bottom:2mm}
+.pv-blk{width:100%;border-collapse:collapse;table-layout:fixed;margin-bottom:0;font-size:9pt}
+.pv-blk td{border:0.6pt solid #000;height:8.6mm;padding:0 1mm;text-align:center;white-space:nowrap;overflow:hidden;color:#000;background:#fff}
+.pv-blk td.nb-t{border-top:0} .pv-blk td.nb-b{border-bottom:0} .pv-blk td.nb-l{border-left:0} .pv-blk td.nb-r{border-right:0}
+.pv-blk td.lab{font-family:"Dotum","돋움",var(--f-body);font-size:9.5pt}
+.pv-blk td.nm{font-size:7.5pt;height:12mm;white-space:normal}
+.pv-blk td.big{font-size:10.5pt}
+.pv-blk td.chart{padding:1mm}
+.pv-blk td.chart svg{width:100%;height:39mm;display:block}
+@media print{
+  @page{size:A4 portrait;margin:14mm 12mm}
+  body{background:#fff;padding:0}
+  .wrap,.toast{display:none!important}
+  #printView{display:block}
+  .pv-page{break-after:page;page-break-after:always}
+  .pv-page:last-child{break-after:auto;page-break-after:auto}
+}
+</style>
+
+<div class="wrap">
+  <header class="panel brand">
+    <div class="eyebrow" style="font-family:var(--f-num);font-size:12px;letter-spacing:.14em;color:var(--accent)">GOENG · SCHMIDT NR</div>
+    <div class="title">
+      <h1>반발경도 콘크리트 강도산정</h1>
+      <p class="sub">Schmidt Hammer (NR형) · 타격각도 보정 + 재령 보정 · 추정 압축강도 (MPa)</p>
+    </div>
+  </header>
+
+  <section class="panel filebar" aria-label="프로젝트">
+    <div class="field grow"><label class="label" for="project">프로젝트명 (용역명)</label><input id="project" placeholder="예: SK텔레콤 보라매사옥 정밀안전진단"></div>
+    <div class="field mid"><label class="label" for="bldg">구분란 표기 (건물명)</label><input id="bldg" placeholder="비우면 프로젝트명 사용"></div>
+    <div class="toolbar">
+      <button class="btn" id="btnNew" type="button">새로 만들기</button>
+      <button class="btn" id="btnOpen" type="button">불러오기</button>
+      <button class="btn" id="btnSave" type="button">저장</button>
+      <button class="btn" id="btnSaveAs" type="button">다른 이름으로 저장</button>
+      <input type="file" id="fileInput" accept=".json,application/json" hidden>
+    </div>
+    <div class="fileinfo"><span>작업 파일</span><b id="fileName" class="num">저장 안 한 새 프로젝트</b><span id="dirty" class="dirty" hidden>● 변경사항 저장 안 됨</span></div>
+  </section>
+
+  <section class="panel cond" aria-label="공통 조건">
+    <div class="field"><label class="label" for="measDate">측정일</label><input type="date" id="measDate"></div>
+    <div class="field"><label class="label" for="compYear">준공연도</label><input type="number" id="compYear" min="1950" max="2100" step="1" placeholder="예: 1998"></div>
+    <div class="field"><label class="label" for="compMonth">준공 월 · 일 (모르면 1/1)</label>
+      <div style="display:flex;gap:6px"><input type="number" id="compMonth" min="1" max="12" value="1" aria-label="준공 월"><input type="number" id="compDay" min="1" max="31" value="1" aria-label="준공 일"></div></div>
+    <div class="field"><label class="label" for="anvil">앤빌 보정값 (기준 80)</label><input type="number" id="anvil" min="50" max="100" step="0.1" value="80" title="테스트 앤빌을 친 반발경도 값. R × 80 / 이 값으로 보정"></div>
+    <div class="field"><label class="label" for="defFck">기본 설계강도 (MPa)</label><input type="number" id="defFck" min="1" step="1" value="24"></div>
+    <div class="agebox"><span class="label">재령일수 → 보정계수 α</span><span><b id="ageDays">–</b> 일 → α <b id="alpha">–</b></span></div>
+  </section>
+
+  <section class="panel" aria-label="결과 요약">
+    <div class="sumhead">
+      <div class="kpis">
+        <div class="kpi"><div class="label">측정점</div><div class="v" id="kCount">0</div></div>
+        <div class="kpi"><div class="label">출력 매수</div><div class="v" id="kPages">0</div></div>
+        <div class="kpi"><div class="label">평균 강도</div><div class="v" id="kAvg">–</div></div>
+        <div class="kpi"><div class="label">최소 강도</div><div class="v" id="kMin">–</div></div>
+      </div>
+      <div class="toolbar">
+        <button class="btn" id="btnAdmin" type="button" aria-pressed="false" title="수식이 들어간 엑셀로 출력">관리자 모드</button>
+        <button class="btn" id="btnPrint" type="button">인쇄</button>
+        <button class="btn primary" id="btnXlsx" type="button">엑셀 출력 (.xlsx)</button>
+      </div>
+    </div>
+    <div class="tablewrap">
+      <table id="sumTable">
+        <thead><tr><th>측정번호</th><th>층</th><th>부재</th><th>타격방향</th><th>R 평균</th><th>ΔR</th><th>R₀</th><th>α</th><th>강도식</th><th>추정강도 (MPa)</th><th>설계강도</th><th>강도비 (%)</th><th>등급</th><th>평가</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="points" id="points"></div>
+  <div style="display:flex;justify-content:center"><button class="btn primary" id="btnAdd" type="button">+ 측정점 추가</button></div>
+
+  <details class="panel ref">
+    <summary>적용 기준 · 보정표</summary>
+    <div class="refbody">
+      <p><b>출력</b>: 엑셀 출력은 기존 '반발경도시험' 양식(측정점 3개 = 1쪽, 28행 단위 페이지 나누기, 인쇄영역 F:O)과 막대 차트, '결과표' 시트로 만듭니다. 기본은 결과 양식만 남기고 모든 값을 숫자로 넣습니다. '관리자 모드'를 켜고 출력하면 원본처럼 수식, A~E열(Input Area), 추정식·보정표가 모두 들어가 엑셀에서 다시 계산됩니다.</p>
+      <p><b>타격값 처리</b>: 20점 평균의 ±20%를 벗어난 값은 제외하고 나머지로 다시 평균하여 R로 합니다. 각도 보정치 ΔR은 처음 평균값(제외 전)의 정수부로 표에서 찾습니다. R₀ = R + ΔR.</p>
+      <p><b>평균값으로 채우기</b>: 입력한 평균을 중심으로 ±편차 안의 정수 20개를 만들고 합계를 평균×20에 맞춥니다. 모든 값이 ±20% 범위 안에 들어가므로 R은 입력한 평균과 같습니다 (0.05 단위).</p>
+      <p><b>앤빌 · 습윤 보정</b>: 앤빌 보정값(시험 전 테스트 앤빌을 친 값, 기준 80)으로 R′ = R × 80 / 앤빌값. 측정면 상태에 따라 기건 R, 반습윤(습하고 타격 흔적이 보임) R + 3, 습윤(완전히 젖음) R + 5. R₀ = R′ + ΔR + 습윤 보정. 엑셀 출력에서는 '타격 평균값'에 앤빌 보정 후 값이, 보정계수 칸에 각도+습윤 보정이 들어가고, 앤빌값이 80이 아니면 페이지 머리줄에 표시됩니다.</p>
+      <p><b>재령 보정</b>: 재령일수 = 측정일 − 준공일. 표에서 재령일수 이하 중 가장 가까운 값의 α를 적용합니다 (3000일 이상 0.63).</p>
+      <p><b>추정식</b>: 같은 R₀ 로 세 값을 계산하고, 측정점마다 고른 식의 값을 결과로 씁니다 (기본 일반). 일반 = 일본재료학회식 α(13R₀ − 184)×0.098 과 일본건축학회식 α(7.3R₀ + 100)×0.098 의 평균. 고강도(30MPa 이상) = 과학기술부식 α(15.2R₀ − 112.8)×0.1. 초고강도(40MPa 이상) = KALIS 추정식 α(1.3343R₀ + 8.1977). 엑셀 출력의 '추정 압축강도' 칸에 세 값이 모두 나오고 고른 식에 ● 표시가 붙습니다.</p>
+      <p><b>등급</b>: 강도비 = 추정강도 / 설계강도 ×100. 100 이상 a, 85 이상 c, 70 이상 d, 70 미만 e (a등급이라도 경미한 손상이 있으면 b). 평가는 강도비 90 초과 건전.</p>
+      <div class="tablewrap" id="angleRef"></div>
+      <div class="tablewrap" id="ageRef"></div>
+    </div>
+  </details>
+  <footer><span>(주)지오 엔지니어링 · 회사 전용 프로그램 · <span id="verLbl">v1.0</span></span><span>제작 YG · 문의 yungi1013@naver.com</span></footer>
+</div>
+<div id="mApp" aria-label="반발경도 강도산정 앱"></div>
+<div class="pw" id="pwModal" hidden><form class="pw-box" id="pwForm" role="dialog" aria-modal="true" aria-labelledby="pwTitle" autocomplete="off">
+  <h2 id="pwTitle">관리자 모드</h2>
+  <p>수식이 들어간 엑셀로 출력하려면 관리자 비밀번호를 입력하세요.</p>
+  <input type="password" id="pwIn" inputmode="numeric" aria-label="관리자 비밀번호" autocomplete="off">
+  <div id="pwMsg" class="pw-msg" role="alert"></div>
+  <div class="pw-btns"><button type="button" class="btn" id="pwCancel">취소</button><button type="submit" class="btn primary">확인</button></div>
+</form></div>
+<div id="printView" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+"use strict";
+const APP_VER="1.0", APP_BUILD="2026-11-11";
+// ── 보정표 (엑셀 '반발경도시험' 시트 X6:AC57, AE6:AF75 그대로) ──
+const ANG={};
+for(let r=10;r<=19;r++) ANG[r]={"90":null,"45":null,"-45":+(2.4+0.01*(r-10)).toFixed(2),"-90":+(3.2+0.02*(r-10)).toFixed(2)};
+[[20,-5.4,-3.5,2.5,3.4],[21,-5.33,-3.46,2.48,3.37],[22,-5.26,-3.42,2.46,3.34],[23,-5.19,-3.38,2.44,3.31],[24,-5.12,-3.34,2.42,3.28],[25,-5.05,-3.3,2.4,3.25],[26,-4.98,-3.26,2.38,3.22],[27,-4.91,-3.22,2.36,3.19],[28,-4.84,-3.18,2.34,3.16],[29,-4.77,-3.14,2.32,3.13],[30,-4.7,-3.1,2.3,3.1],[31,-4.62,-3.05,2.27,3.06],[32,-4.54,-3,2.24,3.02],[33,-4.46,-2.95,2.21,2.98],[34,-4.38,-2.9,2.18,2.94],[35,-4.3,-2.85,2.15,2.9],[36,-4.22,-2.8,2.12,2.86],[37,-4.14,-2.75,2.09,2.82],[38,-4.06,-2.7,2.06,2.78],[39,-3.98,-2.65,2.03,2.74],[40,-3.9,-2.6,2,2.7],[41,-3.82,-2.55,1.95,2.65],[42,-3.74,-2.5,1.9,2.6],[43,-3.66,-2.45,1.85,2.55],[44,-3.58,-2.4,1.8,2.5],[45,-3.5,-2.35,1.75,2.45],[46,-3.42,-2.3,1.7,2.4],[47,-3.34,-2.25,1.65,2.35],[48,-3.26,-2.2,1.6,2.3],[49,-3.18,-2.15,1.55,2.25],[50,-3.1,-2.1,1.5,2.2]]
+  .forEach(a=>ANG[a[0]]={"90":a[1],"45":a[2],"-45":a[3],"-90":a[4]});
+const AGE=[[4,1.9],[5,1.84],[6,1.78],[7,1.72],[8,1.67],[9,1.61],[10,1.55],[11,1.49],[12,1.45],[13,1.4],[14,1.36],[15,1.32],[16,1.23],[17,1.25],[18,1.22],[19,1.18],[20,1.15],[21,1.12],[22,1.1],[23,1.08],[24,1.06],[25,1.04],[26,1.02],[27,1.01],[28,1],[29,0.99],[30,0.99],[32,0.98],[34,0.96],[36,0.95],[38,0.94],[40,0.93],[42,0.92],[44,0.91],[46,0.9],[48,0.88],[50,0.87],[52,0.87],[54,0.87],[56,0.86],[58,0.86],[60,0.86],[62,0.85],[64,0.85],[66,0.85],[68,0.84],[70,0.84],[72,0.84],[74,0.83],[76,0.83],[78,0.82],[80,0.82],[82,0.82],[84,0.81],[86,0.81],[88,0.8],[90,0.8],[100,0.78],[125,0.76],[150,0.74],[175,0.73],[200,0.72],[250,0.71],[300,0.7],[400,0.68],[500,0.67],[750,0.66],[1000,0.65],[2000,0.64],[3000,0.63]];
+const ANGLE_SHORT={"0":"수평 0°","90":"상향 +90°","45":"상향 +45°","-45":"하향 −45°","-90":"하향 −90°"};
+const ANGLE_XL={"0":"0˚","90":"+90˚","45":"+45˚","-45":"-45˚","-90":"-90˚"};
+
+// ── 타격 캐릭터 SVG ──
+const hatch=(x,y,w,h,id)=>{ let s=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="var(--conc)"/>`;
+  for(let k=-Math.max(w,h);k<Math.max(w,h)*2;k+=6) s+=`<line x1="${x+k}" y1="${y+h}" x2="${x+k+h}" y2="${y}" stroke="var(--conc-line)" stroke-width="1"/>`;
+  return `<clipPath id="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath><g clip-path="url(#${id})">${s}</g>`; };
+// 타격각도 그림: 콘크리트 면 + 슈미트해머 + 타격 방향 화살표
+const SVG=(a,uid)=>({
+  "0":`<svg viewBox="0 0 120 92" aria-hidden="true">${hatch(104,0,16,92,uid)}<rect x="40" y="38" width="56" height="16" rx="6" fill="var(--hammer)"/><rect x="52" y="38" width="6" height="16" fill="var(--conc-line)"/><rect x="96" y="42" width="8" height="8" rx="1.5" fill="var(--tip)"/><path d="M10 46H30M24 40l6 6-6 6" stroke="var(--arrow)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M99 32l-4-5M99 60l-4 5" stroke="var(--tip)" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "90":`<svg viewBox="0 0 120 92" aria-hidden="true">${hatch(0,0,120,12,uid)}<rect x="52" y="20" width="16" height="52" rx="6" fill="var(--hammer)"/><rect x="52" y="58" width="16" height="6" fill="var(--conc-line)"/><rect x="56" y="12" width="8" height="8" rx="1.5" fill="var(--tip)"/><path d="M28 86V66M22 72l6-6 6 6" stroke="var(--arrow)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M46 16l-5 3M74 16l5 3" stroke="var(--tip)" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "-90":`<svg viewBox="0 0 120 92" aria-hidden="true">${hatch(0,80,120,12,uid)}<rect x="52" y="20" width="16" height="52" rx="6" fill="var(--hammer)"/><rect x="52" y="28" width="16" height="6" fill="var(--conc-line)"/><rect x="56" y="72" width="8" height="8" rx="1.5" fill="var(--tip)"/><path d="M28 6V26M22 20l6 6 6-6" stroke="var(--arrow)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M46 76l-5-3M74 76l5-3" stroke="var(--tip)" stroke-width="2" stroke-linecap="round"/></svg>`,
+  "45":`<svg viewBox="0 0 120 92" aria-hidden="true">${hatch(0,0,120,12,uid)}<g transform="rotate(45 60 46)"><rect x="52" y="20" width="16" height="52" rx="6" fill="var(--hammer)"/><rect x="56" y="12" width="8" height="8" rx="1.5" fill="var(--tip)"/></g></svg>`,
+  "-45":`<svg viewBox="0 0 120 92" aria-hidden="true">${hatch(0,80,120,12,uid)}<g transform="rotate(-45 60 46)"><rect x="52" y="20" width="16" height="52" rx="6" fill="var(--hammer)"/><rect x="56" y="72" width="8" height="8" rx="1.5" fill="var(--tip)"/></g></svg>`
+})[a];
+const MAIN_ANGLES=[["0","수평","벽·기둥 옆면","0°"],["90","아래 → 위","슬래브·보 밑면","+90°"],["-90","위 → 아래","바닥 윗면","−90°"]];
+
+// ── 계산 (엑셀 수식과 동일) ──
+function ageAlpha(days){ if(!(days>=AGE[0][0])) return null; let a=AGE[0][1]; for(const [d,v] of AGE){ if(d<=days) a=v; else break; } return a; }
+function angleCorr(rawAvg,angle){
+  const warns=[]; if(String(angle)==="0") return {d:0,warns};
+  if(rawAvg<10) return {d:null,warns:["R 평균이 10 미만이라 각도 보정표 범위를 벗어났습니다."]};
+  let r=Math.floor(rawAvg); if(r>50){ r=50; warns.push("R 평균이 50을 넘어 R=50 행의 보정치를 적용했습니다(엑셀과 동일)."); }
+  let v=ANG[r][String(angle)]; if(v==null){ v=0; warns.push("R 20 미만에서는 상향 타격 보정치가 없어 0을 적용했습니다(엑셀과 동일)."); }
+  return {d:v,warns};
+}
+// 앤빌 보정 (R × 80 / 앤빌 측정값) · 측정면 습윤 보정 (기건 R, 반습윤 R+3, 습윤 R+5)
+const MOIST={"기건":0,"반습윤":3,"습윤":5};
+// 강도 구분 : 일반 = 일본재료·일본건축 평균, 고강도 = 과학기술부식, 초고강도 = KALIS 추정식
+const CLS=["일반","고강도","초고강도"];
+const CLS_NOTE={"일반":"일본재료·일본건축 평균","고강도":"과학기술부식 (30MPa 이상)","초고강도":"KALIS 추정식 (40MPa 이상)"};
+const MOIST_LABEL={"기건":"기건","반습윤":"반습윤 +3","습윤":"습윤 +5"};
+function anvilVal(){ const v=parseFloat($("anvil").value); return v>0?v:80; }
+function calcPoint(p,alpha){
+  const vals=p.v.map(x=>x===""||x==null?null:Number(x)).filter(x=>x!=null&&isFinite(x));
+  const out={n:vals.length,warns:[]}; if(!vals.length) return out;
+  const raw=vals.reduce((a,b)=>a+b,0)/vals.length, lo=raw*0.8, hi=raw*1.2, keep=vals.filter(x=>x>lo&&x<hi);
+  Object.assign(out,{raw,lo,hi,kept:keep.length});
+  out.R=keep.reduce((a,b)=>a+b,0)/keep.filter(x=>x>1).length;
+  if(vals.length<20) out.warns.push(`타격값이 ${vals.length}개입니다 (기준 20개).`);
+  out.anvil=anvilVal(); out.Ra=out.R*80/out.anvil; out.mo=MOIST[p.moist]||0;
+  if(out.anvil<70||out.anvil>90) out.warns.push(`앤빌 보정값 ${out.anvil} 이 일반 범위(약 75~85)를 벗어났습니다. 값을 확인하세요.`);
+  const ac=angleCorr(raw,p.angle); out.warns.push(...ac.warns); out.dR=ac.d;
+  if(ac.d==null||alpha==null) return out;
+  const Ro=out.Ra+ac.d+out.mo; out.Ro=Ro; const fck=Number(p.fck);
+  out.f={jmat:alpha*(13*Ro-184)*0.098, jarch:alpha*(7.3*Ro+100)*0.098, most:alpha*(15.2*Ro-112.8)*0.1, kalis:alpha*(1.3343*Ro+8.1977)};
+  out.Fc={"일반":(out.f.jmat+out.f.jarch)/2,"고강도":out.f.most,"초고강도":out.f.kalis};
+  out.cls=CLS.includes(p.cls)?p.cls:"일반"; out.F=out.Fc[out.cls];
+  if(fck>=40&&out.cls!=="초고강도") out.warns.push(`설계강도 ${fck}MPa 입니다. 40MPa 이상이면 '초고강도' 식을 검토하세요.`);
+  else if(fck>=30&&out.cls==="일반") out.warns.push(`설계강도 ${fck}MPa 입니다. 30MPa 이상이면 '고강도' 식을 검토하세요.`);
+  if(fck>0){ out.ratio=out.F/fck*100; out.grade=gradeOf(out.ratio); out.eval=out.ratio>90?"건전":"불건전"; }
+  return out;
+}
+const gradeOf=r=>r>=100?"a":r>=85?"c":r>=70?"d":"e";
+function genValues(mean,spread){
+  const maxS=Math.max(1,Math.floor(mean*0.2-0.5)), s=Math.min(Math.max(1,Math.round(spread)),maxS);
+  const lo=Math.round(mean)-s, hi=Math.round(mean)+s, target=Math.round(mean*20);
+  const v=Array.from({length:20},()=>{const t=(Math.random()+Math.random())/2; return Math.min(hi,Math.max(lo,Math.round(mean+(t-0.5)*2*s)));});
+  let diff=target-v.reduce((a,b)=>a+b,0), g=0;
+  while(diff!==0&&g++<5000){ const k=Math.floor(Math.random()*20); if(diff>0&&v[k]<hi){v[k]++;diff--;} else if(diff<0&&v[k]>lo){v[k]--;diff++;} }
+  return {v,s};
+}
+
+// ── 상태 ──
+const $=id=>document.getElementById(id);
+const pad=i=>"SH-"+String(i+1).padStart(2,"0");
+let points=[], fileHandle=null, fileName="", dirty=false;
+const blank=()=>({floor:"",member:"",angle:"0",moist:"기건",cls:"일반",fck:$("defFck").value||"24",v:Array(20).fill(""),gen:false,genMean:"",genSpread:"4"});
+const SAMPLE={project:"지오엔지니어링 양재사옥 정밀안전진단",bldg:"지오엔지니어링 양재사옥",measDate:"2026-11-10",compYear:"1998",compMonth:"1",compDay:"1",defFck:"24",points:[
+  {floor:"3F",member:"WALL",angle:"0",fck:"24",v:[46,42,44,45,45,49,42,49,46,40,45,46,47,45,47,43,42,43,44,46]},
+  {floor:"3F",member:"WALL",angle:"0",fck:"24",v:[44,42,45,45,38,44,47,45,49,47,47,47,41,41,41,42,43,47,39,50]},
+  {floor:"1F",member:"SLAB",angle:"90",fck:"24",v:[52,50,46,52,49,52,48,48,47,52,49,50,51,53,47,52,55,48,48,55]},
+  {floor:"B1F",member:"WALL",angle:"0",fck:"24",v:[44,44,43,43,46,46,46,42,47,46,46,52,50,46,51,47,51,50,50,48]}
+]};
+function todayStr(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function snapshot(){ return {app:"GOENG_반발경도강도산정",ver:APP_VER,project:$("project").value,bldg:$("bldg").value,measDate:$("measDate").value,compYear:$("compYear").value,compMonth:$("compMonth").value,compDay:$("compDay").value,defFck:$("defFck").value,anvil:$("anvil").value,points:points.map((p,i)=>({no:pad(i),...p}))}; }
+function load(s){
+  $("project").value=s.project||""; $("bldg").value=s.bldg||""; $("measDate").value=s.measDate||todayStr(); $("compYear").value=s.compYear||"";
+  $("compMonth").value=s.compMonth||"1"; $("compDay").value=s.compDay||"1"; $("defFck").value=s.defFck||"24"; $("anvil").value=s.anvil||"80";
+  points=(s.points||[]).map(p=>{const q={...blank(),...p,angle:String(p.angle??"0"),moist:MOIST[p.moist]!=null?p.moist:"기건",cls:CLS.includes(p.cls)?p.cls:"일반",fck:String(p.fck??$("defFck").value),v:(p.v||[]).map(x=>x==null?"":String(x)).concat(Array(20).fill("")).slice(0,20)}; delete q.no; return q;});
+  if(!points.length) points=[blank()];
+  renderCards(); recalc();
+}
+function autosave(){ try{ localStorage.setItem("goeng_rebound_v2",JSON.stringify({...snapshot(),_fileName:fileName,_dirty:dirty})); }catch(e){} }
+function setDirty(d){ dirty=d; $("dirty").hidden=!d; $("fileName").textContent=fileName||"저장 안 한 새 프로젝트"; }
+function changed(){ setDirty(true); recalc(); }
+const bldgName=()=>$("bldg").value.trim()||$("project").value.trim();
+
+// ── 화면 렌더 ──
+const fmt=(x,n=1)=>x==null||!isFinite(x)?"–":x.toFixed(n);
+const fmtS=(x,n=2)=>x==null?"–":(x>0?"+":x<0?"−":"")+Math.abs(x).toFixed(n);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function renderCards(){
+  const box=$("points"); box.innerHTML="";
+  points.forEach((p,i)=>{
+    const c=document.createElement("article"); c.className="panel card"; c.dataset.i=i;
+    c.innerHTML=`
+      <div class="left">
+        <div class="cardhead"><span><span class="no">${pad(i)}</span><span class="pg">출력 ${Math.floor(i/3)+1}쪽 · ${i%3+1}번째</span></span>
+          <span style="display:flex;gap:6px;align-items:center">${p.gen?`<span class="badge" title="평균값으로 자동 생성한 타격값">자동생성</span>`:""}
+          <button class="btn ghost" type="button" data-act="del" ${points.length<2?"hidden":""}>삭제</button></span></div>
+        <div class="meta">
+          <div class="field"><label class="label" for="fl${i}">층 *</label><input id="fl${i}" data-k="floor" value="${esc(p.floor)}" placeholder="예: 3F, B1F" class="${p.floor?"":"need"}"></div>
+          <div class="field"><label class="label" for="mb${i}">부재 *</label><input id="mb${i}" data-k="member" list="memberList" value="${esc(p.member)}" placeholder="예: WALL" class="${p.member?"":"need"}"></div>
+          <div class="field"><label class="label" for="fc${i}">설계강도</label><input id="fc${i}" data-k="fck" type="number" min="1" value="${esc(p.fck)}"></div>
+        </div>
+        <div>
+          <div class="label" style="margin-bottom:5px">타격각도</div>
+          <div class="angles" role="group" aria-label="타격각도">
+            ${MAIN_ANGLES.map(([a,t,d,deg])=>`<button type="button" class="ang" data-angle="${a}" aria-pressed="${p.angle===a}" title="${d}">${SVG(a,`h${i}_${a.replace("-","m")}`)}<span>${t}</span><small>${deg} · ${d}</small></button>`).join("")}
+          </div>
+          <div class="slant">경사 타격: <button type="button" class="chip" data-angle="45" aria-pressed="${p.angle==="45"}">+45° 위로</button><button type="button" class="chip" data-angle="-45" aria-pressed="${p.angle==="-45"}">−45° 아래로</button></div>
+          <div class="slant" style="margin-top:8px" role="group" aria-label="강도 추정식">강도 추정식: ${CLS.map(k=>`<button type="button" class="chip" data-cls="${k}" aria-pressed="${(p.cls||"일반")===k}" title="${CLS_NOTE[k]}">${k}</button>`).join("")}</div>
+          <div class="slant" style="margin-top:8px" role="group" aria-label="측정면 상태">측정면 상태: ${Object.keys(MOIST).map(k=>`<button type="button" class="chip" data-moist="${k}" aria-pressed="${p.moist===k}">${MOIST_LABEL[k]}</button>`).join("")}</div>
+        </div>
+        <div>
+          <div class="label" style="margin-bottom:5px">반발경도 타격값 (20점)</div>
+          <div class="grid">${p.v.map((x,j)=>`<input id="v${i}_${j}" data-j="${j}" inputmode="decimal" value="${esc(x)}" aria-label="타격값 ${j+1}">`).join("")}</div>
+          <div class="hint" style="margin-top:6px">직접 입력하거나 엑셀 4×5 범위를 첫 칸에 붙여넣으세요. 취소선 = ±20% 범위 밖 제외값.</div>
+        </div>
+        <div class="autogen">
+          <div class="field"><label class="label" for="gm${i}">평균값으로 채우기</label><input id="gm${i}" data-k="genMean" type="number" step="0.05" min="10" max="70" value="${esc(p.genMean)}" placeholder="예: 44.8"></div>
+          <div class="field" style="flex:0 1 80px"><label class="label" for="gs${i}">편차 ±</label><input id="gs${i}" data-k="genSpread" type="number" min="1" max="10" step="1" value="${esc(p.genSpread||"4")}"></div>
+          <button class="btn sm" type="button" data-act="gen">${p.gen?"다시 생성":"채우기"}</button>
+        </div>
+      </div>
+      <div class="right" id="res${i}"></div>`;
+    box.appendChild(c);
+  });
+}
+function renderResult(i,r,alpha,days){
+  const p=points[i], el=$("res"+i); if(!el) return;
+  p.v.forEach((x,j)=>{const inp=$(`v${i}_${j}`); if(!inp) return; const n=Number(x); inp.classList.toggle("out", x!==""&&isFinite(n)&&r.lo!=null&&!(n>r.lo&&n<r.hi));});
+  if(!r.n){ el.innerHTML=`<div class="hint">타격값 20개를 입력하거나, 왼쪽 아래에 평균값을 넣고 '채우기'를 누르면 추정 압축강도가 계산됩니다.</div>`; return; }
+  const warns=[...r.warns]; if(alpha==null) warns.unshift("준공연도와 측정일을 입력해야 재령 보정계수 α가 정해집니다 (재령 4일 이상).");
+  const used={"일반":["jmat","jarch"],"고강도":["most"],"초고강도":["kalis"]}[r.cls||"일반"];
+  const rows=[["jmat","일반 · 일본재료학회","α(13R₀ − 184)×0.098"],["jarch","일반 · 일본건축학회","α(7.3R₀ + 100)×0.098"],["most","고강도 · 과학기술부","α(15.2R₀ − 112.8)×0.1"],["kalis","초고강도 · KALIS","α(1.3343R₀ + 8.1977)"]];
+  el.innerHTML=`
+    <div class="steps">
+      <span class="k">① 전체 평균</span><span class="eq">${r.n}개 평균</span><span class="v">${fmt(r.raw,2)}</span>
+      <span class="k">② 유효범위 ±20%</span><span class="eq">${fmt(r.lo,2)} < R < ${fmt(r.hi,2)}</span><span class="v">${r.kept} / ${r.n}개</span>
+      <span class="k">③ 타격 평균값 R</span><span class="eq">유효값 평균</span><span class="v">${fmt(r.R,2)}</span>
+      <span class="k">③′ 앤빌 보정 R′</span><span class="eq">R × 80 / ${r.anvil}</span><span class="v">${fmt(r.Ra,2)}</span>
+      <span class="k">④ 각도 보정 ΔR</span><span class="eq">${ANGLE_SHORT[p.angle]} · 표 R=${r.raw>=10?Math.min(50,Math.floor(r.raw)):"–"}</span><span class="v">${r.dR==null?"–":fmtS(r.dR)}</span>
+      <span class="k">④′ 습윤 보정</span><span class="eq">${p.moist||"기건"}</span><span class="v">${fmtS(r.mo,0)}</span>
+      <span class="k">⑤ 보정 반발경도 R₀</span><span class="eq">R′ + ΔR + 습윤</span><span class="v">${fmt(r.Ro,2)}</span>
+      <span class="k">⑥ 재령 보정 α</span><span class="eq">${days==null?"–":days.toLocaleString()+"일"}</span><span class="v">${alpha==null?"–":alpha.toFixed(2)}</span>
+    </div>
+    ${r.f?`<div class="tablewrap" style="border:1px solid var(--soft);border-radius:4px"><table class="formulas"><thead><tr><th style="text-align:left">추정식</th><th>식</th><th>MPa</th></tr></thead><tbody>
+      ${rows.map(([k,n,f])=>`<tr class="${used.includes(k)?"used":""}"><td class="l">${used.includes(k)?"● ":""}${n}</td><td class="n">${f}</td><td class="n">${fmt(r.f[k])}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="fc3">${CLS.map(k=>`<div class="${k===r.cls?"on":""}"><span class="label">${k}</span><b class="num">${fmt(r.Fc[k],2)}</b></div>`).join("")}</div>
+    <div class="result"><div><div class="label">추정 압축강도 (${r.cls} · ${CLS_NOTE[r.cls]})</div><span class="big">${fmt(r.F)}</span> MPa</div>
+      ${r.ratio!=null?`<div><div class="label">강도비</div><span class="num" style="font-size:16px;font-weight:600">${fmt(r.ratio)}%</span></div>
+      <div><div class="label">등급</div><span class="pill g-${r.grade}">${r.grade}</span></div><div><div class="label">평가</div><span>${r.eval}</span></div>`:""}
+    </div>`:""}
+    ${warns.map(w=>`<div class="warn">${esc(w)}</div>`).join("")}`;
+}
+function getAge(){
+  const md=$("measDate").value, y=parseInt($("compYear").value,10);
+  if(!md||!y) return {days:null,alpha:null,m:1,d:1,y:null};
+  const m=Math.min(12,Math.max(1,parseInt($("compMonth").value,10)||1)), d=Math.min(31,Math.max(1,parseInt($("compDay").value,10)||1));
+  const days=Math.round((Date.UTC(+md.slice(0,4),+md.slice(5,7)-1,+md.slice(8,10))-Date.UTC(y,m-1,d))/86400000);
+  return {days,alpha:ageAlpha(days),y,m,d};
+}
+let lastResults=[];
+function recalc(){
+  const {days,alpha}=getAge();
+  $("ageDays").textContent=days==null?"–":days.toLocaleString(); $("alpha").textContent=alpha==null?"–":alpha.toFixed(2);
+  lastResults=points.map((p,i)=>{const r=calcPoint(p,alpha); renderResult(i,r,alpha,days); return r;});
+  const tb=$("sumTable").tBodies[0]; tb.innerHTML=""; const Fr=[];
+  points.forEach((p,i)=>{const r=lastResults[i]; if(r.F!=null) Fr.push(Math.round(r.F*10)/10);
+    if(i%3===0){ const pm=document.createElement("tr"); pm.className="pagemark"; pm.innerHTML=`<td colspan="14">출력 ${i/3+1}쪽</td>`; tb.appendChild(pm); }
+    const tr=document.createElement("tr");
+    tr.innerHTML=`<td class="l n">${pad(i)}</td><td>${esc(p.floor)||'<span class="hint">미기입</span>'}</td><td>${esc(p.member)||'<span class="hint">미기입</span>'}</td><td>${ANGLE_SHORT[p.angle]}${p.moist&&p.moist!=="기건"?" · "+p.moist:""}</td>
+      <td class="n">${fmt(r.R,2)}</td><td class="n">${r.dR==null?"–":fmtS(r.dR)}</td><td class="n">${fmt(r.Ro,2)}</td><td class="n">${alpha==null?"–":alpha.toFixed(2)}</td>
+      <td>${esc(p.cls||"일반")}</td><td class="n" style="font-weight:700">${fmt(r.F)}</td><td class="n">${esc(p.fck)}</td><td class="n">${fmt(r.ratio)}</td>
+      <td>${r.grade?`<span class="pill g-${r.grade}">${r.grade}</span>`:`<span class="pill g-x">–</span>`}</td><td>${r.eval||"–"}</td>`;
+    tb.appendChild(tr);});
+  $("kCount").textContent=points.length; $("kPages").textContent=Math.ceil(points.length/3);
+  $("kAvg").textContent=Fr.length?(Fr.reduce((a,b)=>a+b,0)/Fr.length).toFixed(1)+" MPa":"–";
+  $("kMin").textContent=Fr.length?Math.min(...Fr).toFixed(1)+" MPa":"–";
+  autosave();
+  if(MOBILE) mUpdate();
+}
+
+// ── 측정점 이벤트 ──
+const box=$("points");
+box.addEventListener("input",e=>{
+  const card=e.target.closest(".card"); if(!card) return; const i=+card.dataset.i, p=points[i], t=e.target;
+  if(t.dataset.j!=null){ p.v[+t.dataset.j]=t.value.trim(); }
+  else if(t.dataset.k){ p[t.dataset.k]=t.value; if(t.dataset.k==="floor"||t.dataset.k==="member") t.classList.toggle("need",!t.value.trim());
+    if(t.dataset.k==="genMean"||t.dataset.k==="genSpread"){ setDirty(true); autosave(); return; } }
+  changed();
+});
+box.addEventListener("paste",e=>{
+  const t=e.target; if(t.dataset.j==null) return;
+  const nums=(e.clipboardData||window.clipboardData).getData("text").split(/[\s,;]+/).filter(s=>s!=="");
+  if(nums.length<2) return; e.preventDefault();
+  const i=+t.closest(".card").dataset.i; let j=+t.dataset.j;
+  nums.forEach(n=>{ if(j<20){ points[i].v[j]=n.replace(/[()]/g,""); const inp=$(`v${i}_${j}`); if(inp) inp.value=points[i].v[j]; j++; }});
+  changed();
+});
+box.addEventListener("keydown",e=>{
+  const t=e.target; if(e.key!=="Enter") return; const i=t.closest(".card")?.dataset.i; if(i==null) return;
+  if(t.dataset.k==="genMean"||t.dataset.k==="genSpread"){ e.preventDefault(); generate(+i); return; }
+  if(t.dataset.j==null) return; e.preventDefault(); const n=$(`v${i}_${+t.dataset.j+1}`); if(n){n.focus();n.select();}
+});
+box.addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b) return; const card=b.closest(".card"); if(!card) return; const i=+card.dataset.i;
+  if(b.dataset.angle!=null){ points[i].angle=b.dataset.angle; card.querySelectorAll("[data-angle]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.angle===points[i].angle))); changed(); return; }
+  if(b.dataset.cls!=null){ points[i].cls=b.dataset.cls; card.querySelectorAll("[data-cls]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.cls===points[i].cls))); changed(); return; }
+  if(b.dataset.moist!=null){ points[i].moist=b.dataset.moist; card.querySelectorAll("[data-moist]").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.moist===points[i].moist))); changed(); return; }
+  if(b.dataset.act==="del"){ points.splice(i,1); renderCards(); changed(); toast("측정점을 삭제하고 번호를 다시 매겼습니다"); return; }
+  if(b.dataset.act==="gen") generate(i);
+});
+box.addEventListener("change",e=>{ const t=e.target; if(t.dataset.j==null) return; const i=+t.closest(".card").dataset.i;
+  if(points[i].gen){ points[i].gen=false; t.closest(".card").querySelector(".badge")?.remove(); autosave(); }});
+function generate(i){
+  const p=points[i], m=parseFloat(p.genMean);
+  if(!(m>=10&&m<=70)){ toast("평균값을 10~70 사이로 입력하세요"); $("gm"+i)?.focus(); return; }
+  const {v,s}=genValues(m,parseFloat(p.genSpread)||4);
+  p.v=v.map(String); p.gen=true; p.genSpread=String(s);
+  renderCards(); changed(); toast(`${pad(i)} 타격값 20개를 생성했습니다 (평균 ${(v.reduce((a,b)=>a+b,0)/20).toFixed(2)})`);
+}
+$("btnAdd").addEventListener("click",()=>{
+  const prev=points[points.length-1], p=blank();
+  if(prev){ p.floor=prev.floor; p.member=prev.member; p.angle=prev.angle; p.moist=prev.moist||"기건"; p.cls=prev.cls||"일반"; p.fck=prev.fck; p.genSpread=prev.genSpread||"4"; }
+  points.push(p); renderCards(); changed(); const f=$(`v${points.length-1}_0`); if(f){ f.scrollIntoView({block:"center"}); f.focus(); }
+});
+["measDate","compYear","compMonth","compDay","project","bldg","defFck","anvil"].forEach(id=>$(id).addEventListener("input",changed));
+
+// ── 파일 저장 공통 ──
+const inFrame=(()=>{try{return window.self!==window.top;}catch(e){return true;}})();
+const hasFS=!inFrame&&"showSaveFilePicker" in window;
+const isIOS=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const safeName=s=>(s||"").replace(/^예시:\s*/,"").replace(/[\\/:*?"<>|]/g,"").trim().slice(0,60);
+// ── 실행 환경: PC 프로그램(pywebview) / 안드로이드 앱 / 브라우저 ──
+const host=()=>window.pywebview&&window.pywebview.api?"pc":window.AndroidBridge?"android":"web";
+async function b64of(blob){ const ab=new Uint8Array(await blob.arrayBuffer()); let s=""; for(let i=0;i<ab.length;i+=0x8000) s+=String.fromCharCode.apply(null,ab.subarray(i,i+0x8000)); return btoa(s); }
+const acb={}; let acbN=0;
+window.__androidCb=(id,json)=>{ const f=acb[id]; delete acb[id]; if(f) f(typeof json==="string"?JSON.parse(json):json); };
+const android=(fn,...args)=>new Promise(res=>{ const id="c"+(++acbN); acb[id]=res; window.AndroidBridge[fn](...args,id); });
+async function saveBlob(blob,name,desc,mime,ext){
+  const hs=host();
+  if(hs==="pc"){ const r=await window.pywebview.api.save_file(name,await b64of(blob),desc,ext);
+    if(!r||!r.ok){ if(r&&r.error) toast("저장하지 못했습니다: "+r.error); return {ok:false,abort:!r||!r.error}; } return {ok:true,handle:{path:r.path},name:r.name}; }
+  if(hs==="android"){ const r=await android("saveFile",name,mime,await b64of(blob));
+    if(!r||!r.ok){ if(r&&r.error) toast("저장하지 못했습니다: "+r.error); return {ok:false,abort:!r||!r.error}; } return {ok:true,handle:{uri:r.uri},name:r.name}; }
+  if(hasFS){
+    try{ const h=await window.showSaveFilePicker({suggestedName:name,types:[{description:desc,accept:{[mime]:[ext]}}]});
+      const w=await h.createWritable(); await w.write(blob); await w.close(); return {ok:true,handle:h,name:h.name}; }
+    catch(e){ if(e.name==="AbortError") return {ok:false,abort:true}; toast("저장하지 못했습니다: "+e.message); return {ok:false}; }
+  }
+  // 아이폰 · 아이패드 : 공유 창으로 저장 ('파일에 저장', 카카오톡 등)
+  if(isIOS&&navigator.canShare){ try{ const file=new File([blob],name,{type:mime}); if(navigator.canShare({files:[file]})){ await navigator.share({files:[file],title:name}); return {ok:true,name,shared:true}; } }
+    catch(e){ if(e.name==="AbortError") return {ok:false,abort:true}; } }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+  return {ok:true,name,download:true};
+}
+const frameNote="미리보기 화면에서는 파일 저장이 막힐 수 있습니다. 프로그램(HTML 파일)에서 실행하세요.";
+
+// ── 작업 파일: 새로 만들기 / 불러오기 / 저장 / 다른 이름으로 저장 ──
+async function writeHandle(h){
+  const txt=JSON.stringify(snapshot(),null,1);
+  if(h.path){ const r=await window.pywebview.api.write_file(h.path,await b64of(new Blob([txt]))); if(!r||!r.ok) throw new Error(r&&r.error||"쓰기 실패"); return; }
+  if(h.uri){ const r=await android("writeUri",h.uri,await b64of(new Blob([txt]))); if(!r||!r.ok) throw new Error(r&&r.error||"쓰기 실패"); return; }
+  const w=await h.createWritable(); await w.write(txt); await w.close(); }
+async function saveAs(){
+  const res=await saveBlob(new Blob([JSON.stringify(snapshot(),null,1)],{type:"application/json"}),fileName||(safeName($("project").value)||"반발경도")+"_강도산정.json","반발경도 작업 파일","application/json",".json");
+  if(!res.ok) return; fileHandle=res.handle||null; fileName=res.name; setDirty(false); autosave();
+  toast(inFrame&&host()==="web"?frameNote:res.shared?`${res.name} 을 공유 창으로 보냈습니다`:res.download?`${res.name} 을 다운로드 폴더에 저장했습니다`:`${res.name} 으로 저장했습니다`);
+}
+async function save(){
+  if(fileHandle){ try{ await writeHandle(fileHandle); setDirty(false); autosave(); toast(`${fileName} 에 저장했습니다`); }catch(e){ toast("저장하지 못했습니다: "+e.message); } return; }
+  return saveAs();
+}
+function applyLoaded(text,name,handle){
+  let s; try{ s=JSON.parse(text); }catch(e){ toast("작업 파일(JSON)을 읽을 수 없습니다"); return; }
+  if(!s||!Array.isArray(s.points)){ toast("반발경도 작업 파일이 아닙니다"); return; }
+  load(s); fileHandle=handle||null; fileName=name; setDirty(false); autosave(); toast(`${name} 을 불러왔습니다 (측정점 ${points.length}개)`);
+}
+let pendingOpen=false;
+async function openFile(){
+  if(dirty&&!pendingOpen){ pendingOpen=true; toast("저장하지 않은 변경사항이 있습니다. 불러오려면 한 번 더 누르세요"); setTimeout(()=>pendingOpen=false,3000); return; }
+  pendingOpen=false;
+  const hs=host();
+  if(hs==="pc"){ const r=await window.pywebview.api.open_file(); if(r&&r.ok) applyLoaded(r.text,r.name,{path:r.path}); else if(r&&r.error) toast("불러오지 못했습니다: "+r.error); return; }
+  if(hs==="android"){ const r=await android("openFile"); if(r&&r.ok) applyLoaded(r.text,r.name,{uri:r.uri}); else if(r&&r.error) toast("불러오지 못했습니다: "+r.error); return; }
+  if(!inFrame&&"showOpenFilePicker" in window){
+    try{ const [h]=await window.showOpenFilePicker({types:[{description:"반발경도 작업 파일",accept:{"application/json":[".json"]}}]}); const f=await h.getFile(); applyLoaded(await f.text(),f.name,h); }
+    catch(e){ if(e.name!=="AbortError") toast("불러오지 못했습니다: "+e.message); }
+    return;
+  }
+  $("fileInput").value=""; $("fileInput").click();
+}
+$("fileInput").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f) applyLoaded(await f.text(),f.name,null); });
+let pendingNew=false;
+$("btnNew").addEventListener("click",()=>{
+  if(dirty&&!pendingNew){ pendingNew=true; $("btnNew").textContent="한 번 더 누르면 새로 만들기"; setTimeout(()=>{pendingNew=false;$("btnNew").textContent="새로 만들기";},3000); return; }
+  pendingNew=false; $("btnNew").textContent="새로 만들기";
+  load({measDate:todayStr(),defFck:"24",points:[]}); fileHandle=null; fileName=""; setDirty(false); autosave();
+});
+$("btnOpen").addEventListener("click",openFile); $("btnSave").addEventListener("click",save); $("btnSaveAs").addEventListener("click",saveAs);
+document.addEventListener("keydown",e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s"){ e.preventDefault(); e.shiftKey?saveAs():save(); }
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="o"){ e.preventDefault(); openFile(); }
+});
+window.addEventListener("beforeunload",e=>{ if(dirty&&!inFrame&&host()==="web"){ e.preventDefault(); e.returnValue=""; }});
+function toast(m){const t=$("toast"); t.textContent=m; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,m.length>40?4200:2400);}
+
+/* ════════════════ 엑셀 출력 (기존 '반발경도시험' 양식) ════════════════ */
+const XE=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const colL=c=>{let s="";while(c>0){const m=(c-1)%26;s=String.fromCharCode(65+m)+s;c=Math.floor((c-1)/26);}return s;};
+const COL={A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,I:9,J:10,K:11,L:12,M:13,N:14,O:15,P:16,Q:17,R:18,S:19,T:20,U:21,V:22,W:23,X:24,Y:25,Z:26,AA:27,AB:28,AC:29,AD:30,AE:31,AF:32};
+const xlDate=(y,m,d)=>(Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/86400000;
+
+function Sheet(valueOnly){
+  const rows=new Map(), merges=[], heights={};
+  const toVal=(o,st)=>{ let v=o.cv; if(typeof v==="number"&&isFinite(v)&&st&&st.nf){ const dec=((st.nf.split(".")[1]||"").match(/0/g)||[]).length; v=+v.toFixed(dec); } return {v:v==null?"":v}; };
+  const cell=(ref)=>{const m=/^([A-Z]+)(\d+)$/.exec(ref); const r=+m[2], c=COL[m[1]]; if(!rows.has(r)) rows.set(r,new Map()); const row=rows.get(r); if(!row.has(c)) row.set(c,{st:{},e:new Set()}); return row.get(c);};
+  const api={
+    set(ref,o,st){ const c=cell(ref); if(valueOnly&&o&&o.f!=null) o=toVal(o,st); Object.assign(c,o); if(st) Object.assign(c.st,st); return api; },
+    st(ref,st){ Object.assign(cell(ref).st,st); return api; },
+    edge(ref,e){ for(const x of e) cell(ref).e.add(x); return api; },
+    range(r1,c1,r2,c2,fn){ for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++) fn(colL(c)+r,r,c); },
+    box(r1,c1,r2,c2){ api.range(r1,c1,r2,c2,(ref,r,c)=>{ if(r===r1) api.edge(ref,"T"); if(r===r2) api.edge(ref,"B"); if(c===c1) api.edge(ref,"L"); if(c===c2) api.edge(ref,"R"); }); return api; },
+    grid(r1,c1,r2,c2){ api.range(r1,c1,r2,c2,(ref)=>api.edge(ref,"LRTB")); return api; },
+    merge(r1,c1,r2,c2){ merges.push(`${colL(c1)}${r1}:${colL(c2)}${r2}`); api.box(r1,c1,r2,c2); return api; },
+    height(r,h){ heights[r]=h; return api; },
+    rows, merges, heights
+  };
+  return api;
+}
+function Styles(){
+  const fonts=[], borders=[], xfs=[], fmts=[], fk={}, bk={}, xk={}, nk={};
+  const font=(f)=>{const k=[f.name,f.sz,f.b?1:0,f.color||""].join("|"); if(fk[k]==null){fk[k]=fonts.length; fonts.push(`<font>${f.b?"<b/>":""}<sz val="${f.sz}"/>${f.color?`<color rgb="${f.color}"/>`:'<color theme="1"/>'}<name val="${XE(f.name)}"/><family val="3"/><charset val="129"/></font>`);} return fk[k];};
+  const border=(e)=>{const k=[..."LRTB"].filter(x=>e.has(x)).join(""); if(bk[k]==null){bk[k]=borders.length; const sd=(t,x)=>e.has(x)?`<${t} style="thin"><color indexed="64"/></${t}>`:`<${t}/>`; borders.push(`<border>${sd("left","L")}${sd("right","R")}${sd("top","T")}${sd("bottom","B")}<diagonal/></border>`);} return bk[k];};
+  const numFmt=(code)=>{ if(!code||code==="General") return 0; if(nk[code]==null){ nk[code]=164+fmts.length; fmts.push(`<numFmt numFmtId="${nk[code]}" formatCode="${XE(code)}"/>`);} return nk[code]; };
+  font({name:"돋움",sz:11}); border(new Set());
+  const xf=(st,e)=>{ const fi=font({name:st.font||"돋움",sz:st.sz||11,b:st.b,color:st.color}), bi=border(e), ni=numFmt(st.nf);
+    const al=st.h||st.v||st.wrap?`<alignment${st.h?` horizontal="${st.h}"`:""} vertical="${st.v||"center"}"${st.wrap?' wrapText="1"':""}/>`:"";
+    const k=[fi,bi,ni,al].join("|"); if(xk[k]==null){ xk[k]=xfs.length; xfs.push(`<xf numFmtId="${ni}" fontId="${fi}" fillId="0" borderId="${bi}" xfId="0"${ni?' applyNumberFormat="1"':""} applyFont="1" applyBorder="1"${al?' applyAlignment="1"':""}>${al}</xf>`);} return xk[k]; };
+  xf({},new Set());
+  const xml=()=>`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${fmts.length?`<numFmts count="${fmts.length}">${fmts.join("")}</numFmts>`:""}<fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="${borders.length}">${borders.join("")}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join("")}</cellXfs><cellStyles count="1"><cellStyle name="표준" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  return {xf,xml};
+}
+function sheetXml(sh,styles,opt){
+  let sd="";
+  const rnums=[...sh.rows.keys()].sort((a,b)=>a-b);
+  for(const r of rnums){
+    const row=sh.rows.get(r), cols=[...row.keys()].sort((a,b)=>a-b);
+    let cx="";
+    for(const c of cols){ const o=row.get(c), ref=colL(c)+r, s=styles.xf(o.st,o.e);
+      if(o.f!=null){ const cv=o.cv; let t="",v="";
+        if(typeof cv==="number"&&isFinite(cv)) v=`<v>${cv}</v>`; else if(typeof cv==="string"){ if(/^#/.test(cv)){t=' t="e"';} else t=' t="str"'; v=`<v>${XE(cv)}</v>`; }
+        cx+=`<c r="${ref}" s="${s}"${t}><f>${XE(o.f)}</f>${v}</c>`; }
+      else if(typeof o.v==="number"&&isFinite(o.v)) cx+=`<c r="${ref}" s="${s}"><v>${o.v}</v></c>`;
+      else if(o.v!=null&&o.v!=="") cx+=`<c r="${ref}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${XE(o.v)}</t></is></c>`;
+      else cx+=`<c r="${ref}" s="${s}"/>`;
+    }
+    const h=sh.heights[r]; sd+=`<row r="${r}"${h?` ht="${h}" customHeight="1"`:""}>${cx}</row>`;
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr>${opt.tab?`<tabColor rgb="${opt.tab}"/>`:""}<pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView${opt.selected?' tabSelected="1"':""} ${opt.view?`view="${opt.view}" `:""}zoomScaleNormal="100" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="24.95" customHeight="1"/><cols>${opt.cols}</cols><sheetData>${sd}</sheetData>${sh.merges.length?`<mergeCells count="${sh.merges.length}">${sh.merges.map(m=>`<mergeCell ref="${m}"/>`).join("")}</mergeCells>`:""}${opt.hcenter?'<printOptions horizontalCentered="1"/>':""}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>${opt.breaks&&opt.breaks.length?`<rowBreaks count="${opt.breaks.length}" manualBreakCount="${opt.breaks.length}">${opt.breaks.map(b=>`<brk id="${b}" max="16383" man="1"/>`).join("")}</rowBreaks>`:""}${opt.drawing?'<drawing r:id="rId1"/>':""}</worksheet>`;
+}
+function chartXml(sn,r1,vals,ymax){
+  const ser=["H","I","J","K"].map((col,si)=>{ const pts=[0,1,2,3,4].map(ri=>`<c:pt idx="${ri}"><c:v>${vals[ri*4+si]}</c:v></c:pt>`).join("");
+    return `<c:ser><c:idx val="${si}"/><c:order val="${si}"/><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr><c:invertIfNegative val="0"/><c:val><c:numRef><c:f>'${XE(sn)}'!$${col}$${r1}:$${col}$${r1+4}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="5"/>${pts}</c:numCache></c:numRef></c:val></c:ser>`; }).join("");
+  const txt=`<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="500"><a:solidFill><a:srgbClr val="000000"/></a:solidFill><a:latin typeface="Century Gothic"/><a:ea typeface="Century Gothic"/></a:defRPr></a:pPr><a:endParaRPr lang="ko-KR"/></a:p></c:txPr>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:date1904 val="0"/><c:lang val="ko-KR"/><c:roundedCorners val="0"/><c:chart><c:autoTitleDeleted val="1"/><c:plotArea><c:layout><c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:x val="0.09"/><c:y val="0.08"/><c:w val="0.88"/><c:h val="0.86"/></c:manualLayout></c:layout><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${ser}<c:gapWidth val="0"/><c:axId val="1001"/><c:axId val="1002"/></c:barChart><c:catAx><c:axId val="1001"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="none"/><c:spPr><a:ln w="9525"><a:noFill/></a:ln></c:spPr><c:crossAx val="1002"/><c:crosses val="autoZero"/><c:auto val="0"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx><c:valAx><c:axId val="1002"/><c:scaling><c:orientation val="minMax"/><c:max val="${ymax}"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="in"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="3175"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln></c:spPr>${txt}<c:crossAx val="1001"/><c:crosses val="autoZero"/><c:crossBetween val="between"/><c:majorUnit val="10"/></c:valAx><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr></c:plotArea><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart><c:spPr><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln w="9525"><a:noFill/></a:ln></c:spPr>${txt}</c:chartSpace>`;
+}
+function anchorXml(i,r1){ // r1: 1-based 차트 첫 행 (블록 2번째 행)
+  return `<xdr:twoCellAnchor><xdr:from><xdr:col>11</xdr:col><xdr:colOff>22412</xdr:colOff><xdr:row>${r1-1}</xdr:row><xdr:rowOff>19050</xdr:rowOff></xdr:from><xdr:to><xdr:col>14</xdr:col><xdr:colOff>276587</xdr:colOff><xdr:row>${r1+3}</xdr:row><xdr:rowOff>290000</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${i+2}" name="Chart ${i+1}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rId${i+1}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+}
+
+// 한 측정점의 엑셀 셀 값(캐시값) 계산
+function blockCache(p,alpha){
+  const nums=p.v.map(x=>x===""||x==null||!isFinite(Number(x))?null:Number(x));
+  const given=nums.filter(x=>x!=null), raw=given.length?given.reduce((a,b)=>a+b,0)/given.length:null;
+  const lo=raw==null?null:raw*0.8, hi=raw==null?null:raw*1.2;
+  const H=nums.map(x=>x!=null&&x>lo&&x<hi?x:"(  )");
+  const kept=H.filter(x=>typeof x==="number"), havg=kept.length?kept.reduce((a,b)=>a+b,0)/kept.filter(x=>x>1).length:null;
+  let C; if(raw==null||raw<10) C="#N/A"; else if(String(p.angle)==="0") C=0; else { const rr=Math.min(50,Math.floor(raw)); const v=ANG[rr][String(p.angle)]; C=v==null?0:v; }
+  const anvil=anvilVal(), mo=MOIST[p.moist]||0, havgA=havg==null?null:havg*80/anvil;
+  const dR=typeof C==="number"?C:null, Cm=dR==null?"#N/A":dR+mo, K=havgA!=null&&dR!=null?havgA+dR+mo:null, a=alpha;
+  const U=K!=null&&a!=null?{ktx:(17.2*K-214)*a*0.1,most:(15.2*K-112.8)*a*0.1,jmat:(13*K-184)*a*0.098,jarch:(7.3*K+100)*a*0.098}:null;
+  const fck=Number(p.fck)||0, cls=CLS.includes(p.cls)?p.cls:"일반";
+  if(U) U.kalis=(1.3343*K+8.1977)*a;
+  const Nc=U?{"일반":(U.jmat+U.jarch)/2,"고강도":U.most,"초고강도":U.kalis}:null, N=Nc?Nc[cls]:null;
+  return {cls,Nc,nums,raw,lo,hi,H,havg,havgA,anvil,mo,Cm,C,dR,K,a,U,N,fck,ratio:N!=null&&fck?N/fck*100:null};
+}
+
+function buildXlsx(admin){
+  const SN="반발경도시험", RN="결과표";
+  const st=Styles(), sh=Sheet(!admin);
+  const {alpha,y,m,d}=getAge(), md=$("measDate").value;
+  const project=safeName($("project").value)||$("project").value.trim(), bname=bldgName().replace(/^예시:\s*/,"");
+  const n=points.length, pages=Math.ceil(n/3), lastRow=pages*28;
+  const RED={color:"FFFF0000",b:1};
+  if(admin){ // 관리자: 계산용 입력·보정표 포함
+  // 공통: 측정일 / 준공일
+  sh.set("S1",{v:"측정일"},{h:"center"}); if(md) sh.set("T1",{v:xlDate(+md.slice(0,4),+md.slice(5,7),+md.slice(8,10))},{nf:"yyyy-mm-dd",h:"center",...RED});
+  sh.set("X1",{v:"앤빌 보정값"},{h:"center"}); sh.set("Y1",{v:anvilVal()},{h:"center",...RED});
+  sh.set("V1",{v:"준공일"},{h:"center"}); if(y) sh.set("W1",{v:xlDate(y,m,d)},{nf:"yyyy-mm-dd",h:"center",...RED});
+  // 보정표 (X5:AC47, AE5:AF75)
+  sh.set("X5",{v:"각도보정"}); sh.set("AE5",{v:"재령보정"});
+  ["Y","Z","AA","AB","AC"].forEach((c,k)=>sh.set(c+"6",{v:[90,45,-45,-90,0][k]},{h:"center"}));
+  for(let r=10;r<=50;r++){ const row=r-10+7; sh.set("X"+row,{v:r},{h:"center"});
+    ["90","45","-45","-90"].forEach((a,k)=>{ const v=ANG[r][a]; if(v!=null) sh.set(["Y","Z","AA","AB"][k]+row,{v},{h:"center"}); }); sh.set("AC"+row,{v:0},{h:"center"}); }
+  AGE.forEach(([dd,aa],k)=>{ sh.set("AE"+(6+k),{v:dd},{h:"center"}); sh.set("AF"+(6+k),{v:aa},{h:"center"}); });
+  }
+  const charts=[], anchors=[], breaks=[], blockRows=[];
+  for(let pg=0;pg<pages;pg++){
+    const P=pg*28+1;
+    sh.height(P,22.5).set("F"+P,{v:"▣ 용역명 : "+project+(anvilVal()!==80?`      ※ 앤빌 보정 : R × 80 / ${anvilVal()}`:"")},{font:"굴림",sz:10,b:1,h:"left"});
+    sh.merge(P,6,P,15); // 아랫줄만 남김
+    sh.range(P,6,P,15,ref=>{ const c=sh.rows.get(P).get(COL[ref.replace(/\d+/,"")]); c.e=new Set(["B"]); });
+    if(pg>0) breaks.push(P-1);
+    for(let s=0;s<3;s++){
+      const k=pg*3+s, r=P+1+s*9;
+      sh.height(r,24.95); for(let q=1;q<=8;q++) sh.height(r+q,q===1?36:24.95);
+      if(k>=n){ continue; }
+      const p=points[k], c=blockCache(p,alpha); blockRows.push({k,r});
+      const L9={font:"굴림",sz:9,h:"center"}, D10={font:"돋움",sz:10,h:"center"};
+      // Input Area (A:E) - 관리자 출력에만
+      if(admin){
+      sh.set("A"+r,{v:"Input  Area"},{font:"돋움",sz:9,b:1});
+      for(let i=0;i<5;i++) for(let j=0;j<4;j++){ const v=c.nums[i*4+j]; sh.set("ABCD"[j]+(r+1+i),{v:v==null?"":v},{h:"center",...RED}).grid(r+1+i,1+j,r+1+i,1+j); }
+      sh.set("E"+(r+2),{f:`A${r+7}*0.8`,cv:c.lo},{nf:"0.00",h:"center"}); sh.set("E"+(r+3),{f:`A${r+7}*1.2`,cv:c.hi},{nf:"0.00",h:"center"});
+      sh.set("E"+(r+4),{v:"습윤상태"},{font:"돋움",sz:9,h:"center"}); sh.set("E"+(r+5),{v:p.moist||"기건"},{font:"돋움",sz:9,h:"center",...RED});
+      sh.set("A"+(r+6),{v:Number(p.angle)},{h:"center",...RED}); sh.set("B"+(r+6),{v:"("},{h:"center"});
+      sh.set("C"+(r+6),{f:`INDEX($Y$7:$AC$57,MATCH(A${r+7},$X$7:$X$57,1),MATCH(A${r+6},$Y$6:$AC$6,0))`,cv:c.C},{nf:"0.00",h:"center"}); sh.set("D"+(r+6),{v:")"},{h:"center"});
+      sh.set("A"+(r+7),{f:`AVERAGE(A${r+1}:D${r+5})`,cv:c.raw},{nf:"0.00",h:"center"}); sh.set("B"+(r+7),{f:`C${r+6}`,cv:c.C},{nf:"0.00",h:"center"});
+      sh.set("C"+(r+7),{v:"="},{h:"center"}); sh.set("D"+(r+7),{f:`A${r+7}+B${r+7}`,cv:typeof c.C==="number"&&c.raw!=null?c.raw+c.C:"#N/A"},{nf:"0.00",h:"center"});
+      sh.set("A"+(r+8),{f:`LOOKUP($T$1-$W$1,$AE$6:$AE$75,$AF$6:$AF$75)`,cv:c.a==null?"#N/A":c.a},{nf:"0.00",h:"center"});
+      }
+      // 머리줄
+      sh.set("F"+r,{v:"구     분"},D10).merge(r,6,r,7);
+      sh.set("H"+r,{v:"타 격 값"},{font:"굴림",sz:10,h:"center"}).merge(r,8,r,11);
+      sh.set("L"+r,{v:"측정 Data Chart"},{font:"굴림",sz:10,h:"center"}).merge(r,12,r,15);
+      // 구분란
+      sh.set("F"+(r+1),{v:bname},{font:"돋움",sz:8,h:"center",wrap:1}).merge(r+1,6,r+1,7);
+      sh.set("F"+(r+2),{v:pad(k)},{font:"돋움",sz:11,h:"center"}).merge(r+2,6,r+2,7);
+      sh.set("F"+(r+3),{v:p.floor},{font:"돋움",sz:11,h:"center"}).merge(r+3,6,r+3,7);
+      sh.set("F"+(r+4),{v:p.member+(c.mo?` (${p.moist})`:"")},{font:"돋움",sz:11,h:"center"}).merge(r+4,6,r+4,7);
+      sh.set("F"+(r+5),{v:"설계강도"},D10); sh.set("G"+(r+5),{f:`Q${r+8}`,cv:c.fck},{...D10,nf:'00"MPa"'});
+      // 구분란 안쪽 가로줄 없이 바깥 테두리만
+      [r+1,r+2,r+3,r+4].forEach(rr=>sh.range(rr,6,rr,7,ref=>{ const o=sh.rows.get(rr).get(COL[ref.replace(/\d+/,"")]); o.e.delete("B"); if(rr>r+1) o.e.delete("T"); }));
+      sh.box(r+1,6,r+5,7);
+      // 타격값 (H:K)
+      for(let i=0;i<5;i++) for(let j=0;j<4;j++){ const rr=r+1+i, cc="HIJK"[j], src="ABCD"[j]+rr;
+        sh.set(cc+rr,{f:`IF(AND(${src}>E${r+2},${src}<E${r+3}),${src},"(  )")`,cv:c.H[i*4+j]},L9).grid(rr,8+j,rr,8+j); }
+      // 차트 영역
+      sh.merge(r+1,12,r+5,15);
+      // 보정계수 / 평균 / 재령
+      sh.set("F"+(r+6),{v:c.mo?"각도·습윤 보정계수":"타격에 따른 보정계수"},D10).merge(r+6,6,r+6,7);
+      sh.set("H"+(r+6),{f:`IF(A${r+6}=90,"+90˚",IF(A${r+6}=-90,"-90˚",IF(A${r+6}=45,"+45˚",IF(A${r+6}=-45,"-45˚","0˚"))))`,cv:ANGLE_XL[p.angle]},L9);
+      sh.set("I"+(r+6),{v:"("},L9); sh.set("J"+(r+6),{f:`IF(E${r+7}>0,E${r+8},C${r+6})+IF(E${r+5}="습윤",5,IF(E${r+5}="반습윤",3,0))`,cv:c.Cm},{...L9,nf:"#0.00"}); sh.set("K"+(r+6),{v:")"},L9); sh.box(r+6,8,r+6,11);
+      sh.set("F"+(r+7),{v:"타격 평균값"},D10).merge(r+7,6,r+7,7);
+      sh.set("H"+(r+7),{f:`SUM(H${r+1}:K${r+5})/COUNTIF(H${r+1}:K${r+5},">1")*80/$Y$1`,cv:c.havgA},{...L9,nf:"0.00"});
+      sh.set("I"+(r+7),{f:`(J${r+6})`,cv:c.Cm},{...L9,nf:"0.00"}); sh.set("J"+(r+7),{v:"="},L9);
+      sh.set("K"+(r+7),{f:`H${r+7}+I${r+7}`,cv:c.K==null?"#N/A":c.K},{...L9,nf:"0.00"}); sh.box(r+7,8,r+7,11);
+      sh.set("F"+(r+8),{v:"재령에 따른 보정치"},D10).merge(r+8,6,r+8,7);
+      sh.set("H"+(r+8),{f:`A${r+8}`,cv:c.a==null?"#N/A":c.a},{...L9,nf:"0.00"}).merge(r+8,8,r+8,11);
+      sh.set("L"+(r+6),{v:"추정 압축강도"},L9).merge(r+6,12,r+8,12);
+      // 같은 R₀ 로 일반 / 고강도 / 초고강도 세 값, 고른 식은 ● 와 굵게
+      const nv=k=>c.Nc?c.Nc[k]:"#N/A", fsrc={"일반":`AVERAGE(U${r+6}:U${r+7})`,"고강도":`U${r+5}`,"초고강도":`U${r+8}`};
+      CLS.forEach((k,q)=>{ const rr=r+6+q, on=c.cls===k;
+        sh.set("M"+rr,{f:`IF($E$${r+6}="${k}","● ${k}","${k}")`,cv:on?"● "+k:k},{...L9,b:on?1:0});
+        sh.set("N"+rr,{f:fsrc[k],cv:nv(k)},{...L9,nf:"#,##0.0_ ",b:on?1:0}); });
+      [r+6,r+7,r+8].forEach(rr=>{ sh.set("O"+rr,{v:"MPa"},L9); sh.grid(rr,13,rr,15); });
+      // 추정식 (T:U), 설계강도·강도비·등급 (Q:S) - 관리자 출력에만
+      if(admin){
+      const K=`K${r+7}`, A=`H${r+8}`;
+      sh.set("T"+(r+8),{v:"KALIS 초고강도"}); sh.set("U"+(r+8),{f:`(1.3343*${K}+8.1977)*${A}`,cv:c.U?c.U.kalis:"#N/A"},{nf:"0.0"});
+      sh.set("E"+(r+6),{v:c.cls},{font:"돋움",sz:9,h:"center",...RED});
+      sh.set("P"+(r+7),{v:"적용강도"},{h:"center"}); sh.set("P"+(r+8),{f:`IF(E${r+6}="고강도",N${r+7},IF(E${r+6}="초고강도",N${r+8},N${r+6}))`,cv:c.N==null?"#N/A":c.N},{nf:"0.0",h:"center"});
+      sh.set("T"+(r+5),{v:"한국과학기술부식"}); sh.set("U"+(r+5),{f:`(15.2*${K}-112.8)*${A}*0.1`,cv:c.U?c.U.most:"#N/A"},{nf:"0.0"});
+      sh.set("T"+(r+6),{v:"일본재료"}); sh.set("U"+(r+6),{f:`(13*${K}-184)*${A}*0.098`,cv:c.U?c.U.jmat:"#N/A"},{nf:"0.0"});
+      sh.set("T"+(r+7),{v:"일본건축"}); sh.set("U"+(r+7),{f:`(7.3*${K}+100)*${A}*0.098`,cv:c.U?c.U.jarch:"#N/A"},{nf:"0.0"});
+      sh.set("Q"+(r+7),{v:"설계강도"},{h:"center"}); sh.set("Q"+(r+8),{v:c.fck},{h:"center",...RED});
+      sh.set("R"+(r+8),{f:`(P${r+8}/Q${r+8})*100`,cv:c.ratio==null?"#N/A":c.ratio},{nf:"0.0",h:"center"});
+      sh.set("S"+(r+8),{f:`IF(R${r+8}>=100,"a",IF(R${r+8}>=85,"c",IF(R${r+8}>=70,"d","e")))`,cv:c.ratio==null?"#N/A":gradeOf(c.ratio)},{h:"center"});
+      }
+      // 차트
+      const vals=c.H.map(x=>typeof x==="number"?x:0), ymax=Math.max(...vals)>60?70:60;
+      charts.push(chartXml(SN,r+1,vals,ymax)); anchors.push(anchorXml(charts.length-1,r+1));
+    }
+  }
+  const cols1=(admin?`<col min="1" max="4" width="6.33" customWidth="1"/><col min="5" max="5" width="6.55" customWidth="1"/>`:`<col min="1" max="5" width="1.5" hidden="1" customWidth="1"/>`)+`<col min="6" max="6" width="9.11" customWidth="1"/><col min="7" max="7" width="8.22" customWidth="1"/><col min="8" max="11" width="6.11" customWidth="1"/><col min="12" max="12" width="10.22" customWidth="1"/><col min="13" max="13" width="12.66" customWidth="1"/><col min="14" max="14" width="6.66" customWidth="1"/><col min="15" max="15" width="4.11" customWidth="1"/><col min="16" max="19" width="8.89" customWidth="1"/><col min="20" max="20" width="17" customWidth="1"/><col min="21" max="21" width="8" customWidth="1"/>`;
+  const sheet1=sheetXml(sh,st,{cols:cols1,breaks,drawing:charts.length>0,selected:1,view:"pageBreakPreview",tab:"FF92D050",hcenter:1});
+
+  // 결과표 시트
+  const rs=Sheet(!admin), H={font:"돋움",sz:10,h:"center",b:1}, B={font:"돋움",sz:10,h:"center"};
+  rs.set("A1",{v:"▣ 용역명 : "+project},{font:"굴림",sz:10,b:1,h:"left"}); rs.merge(1,1,1,10); rs.range(1,1,1,10,ref=>{rs.rows.get(1).get(COL[ref.replace(/\d+/,"")]).e=new Set(["B"]);});
+  rs.height(1,22.5);
+  const hd=[["A","측정번호"],["B","위치"],["D","타격방향"],["E","반발경도시험"],["F","강도비"],["G","설계강도"],["H","등 급"],["I","평 가"]];
+  hd.forEach(([c,t])=>rs.set(c+"2",{v:t},H)); rs.set("B3",{v:"층"},H); rs.set("C3",{v:"부재"},H); rs.set("E3",{v:"(MPa)"},B); rs.set("F3",{v:"(%)"},B); rs.set("G3",{v:"(MPa)"},B);
+  rs.merge(2,2,2,3); [1,4,8,9].forEach(c=>rs.merge(2,c,3,c)); rs.grid(2,1,3,9);
+  let rr=4; const Fs=[];
+  blockRows.forEach(({k,r})=>{ const p=points[k], c=blockCache(p,alpha);
+    rs.set("A"+rr,{v:pad(k)},B); rs.set("B"+rr,{v:p.floor},B); rs.set("C"+rr,{v:p.member},B); rs.set("D"+rr,{v:ANGLE_SHORT[p.angle]},B);
+    rs.set("E"+rr,{f:`'${SN}'!P${r+8}`,cv:c.N==null?"#N/A":c.N},{...B,nf:"0.0"});
+    rs.set("F"+rr,{f:`(E${rr}/G${rr})*100`,cv:c.ratio==null?"#N/A":c.ratio},{...B,nf:"0.0"});
+    rs.set("G"+rr,{f:`'${SN}'!Q${r+8}`,cv:c.fck},B);
+    rs.set("H"+rr,{f:`IF(F${rr}>=100,"a",IF(F${rr}>=85,"c",IF(F${rr}>=70,"d","e")))`,cv:c.ratio==null?"#N/A":gradeOf(c.ratio)},B);
+    rs.set("I"+rr,{f:`IF(F${rr}>90,"건전","불건전")`,cv:c.ratio==null?"#N/A":(c.ratio>90?"건전":"불건전")},B);
+    rs.grid(rr,1,rr,9); if(c.N!=null) Fs.push(c.N); rr++; });
+  if(blockRows.length){
+    rs.set("A"+rr,{v:"평균 강도"},H).merge(rr,1,rr,4); rs.set("E"+rr,{f:`AVERAGE(E4:E${rr-1})`,cv:Fs.length?Fs.reduce((a,b)=>a+b,0)/Fs.length:"#N/A"},{...H,nf:"0.0"}); rs.grid(rr,5,rr,9);
+    rs.set("A"+(rr+1),{v:"최소 강도"},H).merge(rr+1,1,rr+1,4); rs.set("E"+(rr+1),{f:`MIN(E4:E${rr-1})`,cv:Fs.length?Math.min(...Fs):"#N/A"},{...H,nf:"0.0"}); rs.grid(rr+1,5,rr+1,9);
+  }
+  const cols2=`<col min="1" max="1" width="11" customWidth="1"/><col min="2" max="3" width="9" customWidth="1"/><col min="4" max="4" width="11" customWidth="1"/><col min="5" max="7" width="12" customWidth="1"/><col min="8" max="9" width="9" customWidth="1"/>`;
+  const sheet2=sheetXml(rs,st,{cols:cols2,hcenter:1});
+
+  const files=[];
+  const add=(name,str)=>files.push({name,data:new TextEncoder().encode(str)});
+  add("[Content_Types].xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${charts.length?'<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>':""}${charts.map((_,i)=>`<Override PartName="/xl/charts/chart${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`).join("")}<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`);
+  add("_rels/.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`);
+  const now=new Date().toISOString().replace(/\.\d+Z$/,"Z");
+  add("docProps/core.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${XE(project)} 반발경도시험</dc:title><dc:creator>YG</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`);
+  add("docProps/app.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Microsoft Excel</Application><Company>(주)지오 엔지니어링</Company></Properties>`);
+  add("xl/workbook.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="${SN}" sheetId="1" r:id="rId1"/><sheet name="${RN}" sheetId="2" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm.Print_Area" localSheetId="0">'${SN}'!$F$1:$O$${lastRow}</definedName><definedName name="_xlnm.Print_Area" localSheetId="1">'${RN}'!$A$1:$I$${Math.max(rr+1,4)}</definedName></definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`);
+  add("xl/_rels/workbook.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  add("xl/worksheets/sheet1.xml",sheet1); add("xl/worksheets/sheet2.xml",sheet2);
+  if(charts.length){
+    add("xl/worksheets/_rels/sheet1.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`);
+    add("xl/drawings/drawing1.xml",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${anchors.join("")}</xdr:wsDr>`);
+    add("xl/drawings/_rels/drawing1.xml.rels",`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${charts.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${i+1}.xml"/>`).join("")}</Relationships>`);
+    charts.forEach((x,i)=>add(`xl/charts/chart${i+1}.xml`,x));
+  }
+  add("xl/styles.xml",st.xml()); // 스타일은 시트 생성 뒤에 확정
+  return zip(files);
+}
+// ── ZIP (무압축 저장) ──
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&0xFF]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function zip(files){
+  const enc=new TextEncoder(), parts=[], cen=[]; let off=0;
+  const dt=new Date(), dtime=(dt.getHours()<<11)|(dt.getMinutes()<<5)|(dt.getSeconds()>>1), ddate=((dt.getFullYear()-1980)<<9)|((dt.getMonth()+1)<<5)|dt.getDate();
+  for(const f of files){ const nm=enc.encode(f.name), crc=crc32(f.data), sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30)); h.setUint32(0,0x04034b50,true); h.setUint16(4,20,true); h.setUint16(6,0x0800,true); h.setUint16(8,0,true); h.setUint16(10,dtime,true); h.setUint16(12,ddate,true); h.setUint32(14,crc,true); h.setUint32(18,sz,true); h.setUint32(22,sz,true); h.setUint16(26,nm.length,true); h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),nm,f.data);
+    const c=new DataView(new ArrayBuffer(46)); c.setUint32(0,0x02014b50,true); c.setUint16(4,20,true); c.setUint16(6,20,true); c.setUint16(8,0x0800,true); c.setUint16(10,0,true); c.setUint16(12,dtime,true); c.setUint16(14,ddate,true); c.setUint32(16,crc,true); c.setUint32(20,sz,true); c.setUint32(24,sz,true); c.setUint16(28,nm.length,true); c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),nm); off+=30+nm.length+sz; }
+  const cenSize=cen.reduce((a,b)=>a+b.length,0), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,cenSize,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...cen,new Uint8Array(e.buffer)],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function checkReady(){
+  const miss=points.map((p,i)=>(!p.floor.trim()||!p.member.trim())?pad(i):null).filter(Boolean);
+  if(miss.length){ toast(`층·부재를 입력하세요: ${miss.slice(0,6).join(", ")}${miss.length>6?" 외":""}`); return false; }
+  if(getAge().alpha==null){ toast("측정일과 준공연도를 입력하세요"); $("compYear").focus(); return false; }
+  return true;
+}
+$("btnXlsx").addEventListener("click",async()=>{
+  if(!checkReady()) return;
+  const blob=buildXlsx(ADMIN), name=(safeName($("project").value)||"반발경도")+(ADMIN?"_반발경도시험_수식.xlsx":"_반발경도시험.xlsx");
+  const res=await saveBlob(blob,name,"Excel 통합 문서","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",".xlsx");
+  if(res.ok) toast(inFrame&&host()==="web"?frameNote:`${res.name} 로 출력했습니다${ADMIN?" · 수식 포함":""} (${Math.ceil(points.length/3)}쪽, 측정점 ${points.length}개)`);
+});
+
+// 관리자 모드: 켜면 수식이 들어간 엑셀(계산 입력란·보정표 포함)로 출력. 프로그램을 다시 열면 꺼짐
+let ADMIN=false;
+function setAdmin(on){ ADMIN=!!on; const b=$("btnAdmin"); b.setAttribute("aria-pressed",String(ADMIN)); b.classList.toggle("on",ADMIN);
+  b.textContent=ADMIN?"관리자 모드 켜짐":"관리자 모드"; $("btnXlsx").textContent=ADMIN?"엑셀 출력 (수식 포함)":"엑셀 출력 (.xlsx)";
+  document.dispatchEvent(new CustomEvent("adminchange")); }
+// 관리자 비밀번호 : 코드에는 원문 없이 해시값만 둠
+const ADMIN_HASH="e7406dea6a0a22089e3f281b7f89c36d2cf8ceae9af032f3b94e9fcb192a250c";
+function sha256hex(str){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const b=new TextEncoder().encode(str), l=b.length, n=((l+9+63)>>6)<<6, m=new Uint8Array(n); m.set(b); m[l]=0x80;
+  const dv=new DataView(m.buffer); dv.setUint32(n-4,l*8);
+  let h=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19]; const w=new Uint32Array(64);
+  const R=(x,k)=>(x>>>k)|(x<<(32-k));
+  for(let o=0;o<n;o+=64){
+    for(let i=0;i<16;i++) w[i]=dv.getUint32(o+i*4);
+    for(let i=16;i<64;i++){ const s0=R(w[i-15],7)^R(w[i-15],18)^(w[i-15]>>>3), s1=R(w[i-2],17)^R(w[i-2],19)^(w[i-2]>>>10); w[i]=(w[i-16]+s0+w[i-7]+s1)|0; }
+    let [a,bb,c,d,e,f,g,hh]=h;
+    for(let i=0;i<64;i++){ const t1=(hh+(R(e,6)^R(e,11)^R(e,25))+((e&f)^(~e&g))+K[i]+w[i])|0, t2=((R(a,2)^R(a,13)^R(a,22))+((a&bb)^(a&c)^(bb&c)))|0;
+      hh=g; g=f; f=e; e=(d+t1)|0; d=c; c=bb; bb=a; a=(t1+t2)|0; }
+    h=h.map((x,i)=>(x+[a,bb,c,d,e,f,g,hh][i])|0);
+  }
+  return h.map(x=>(x>>>0).toString(16).padStart(8,"0")).join("");
+}
+let pwFails=0, pwLockUntil=0;
+function openPw(){ $("pwIn").value=""; $("pwMsg").textContent=""; $("pwModal").hidden=false; setTimeout(()=>$("pwIn").focus(),30); }
+function closePw(){ $("pwModal").hidden=true; }
+$("pwForm").addEventListener("submit",e=>{ e.preventDefault();
+  if(Date.now()<pwLockUntil){ $("pwMsg").textContent=`잠시 후 다시 시도하세요 (${Math.ceil((pwLockUntil-Date.now())/1000)}초)`; return; }
+  if(sha256hex("GOENG-RBND|"+$("pwIn").value.trim())===ADMIN_HASH){ pwFails=0; closePw(); setAdmin(true); toast("관리자 모드: 수식이 들어간 엑셀로 출력합니다"); return; }
+  pwFails++; $("pwIn").value=""; $("pwIn").focus();
+  if(pwFails>=5){ pwFails=0; pwLockUntil=Date.now()+30000; $("pwMsg").textContent="5번 틀려서 30초 동안 입력할 수 없습니다"; }
+  else $("pwMsg").textContent=`비밀번호가 맞지 않습니다 (${pwFails}/5)`;
+});
+$("pwCancel").addEventListener("click",closePw);
+$("pwModal").addEventListener("click",e=>{ if(e.target===$("pwModal")) closePw(); });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&!$("pwModal").hidden) closePw(); });
+$("btnAdmin").addEventListener("click",()=>{ if(ADMIN){ setAdmin(false); toast("일반 모드: 결과값만 숫자로 출력합니다"); } else openPw(); });
+
+/* ════════════════ 인쇄 (엑셀 양식과 같은 배치, 3개/쪽) ════════════════ */
+function barSvg(vals){
+  const ymax=Math.max(...vals)>60?70:60, W=200, Hh=110, x0=16, y0=6, pw=W-x0-4, ph=Hh-y0-6, bw=pw/20;
+  let s=`<svg viewBox="0 0 ${W} ${Hh}" preserveAspectRatio="none">`;
+  for(let t=0;t<=ymax;t+=10){ const y=y0+ph-ph*t/ymax; s+=`<text x="${x0-3}" y="${y+2}" font-size="5" text-anchor="end" fill="#000">${t}</text><line x1="${x0}" x2="${x0+2}" y1="${y}" y2="${y}" stroke="#000" stroke-width=".4"/>`; }
+  s+=`<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y0+ph}" stroke="#000" stroke-width=".5"/><line x1="${x0}" y1="${y0+ph}" x2="${x0+pw}" y2="${y0+ph}" stroke="#000" stroke-width=".5"/>`;
+  vals.forEach((v,i)=>{ const h=ph*v/ymax; if(h>0) s+=`<rect x="${x0+i*bw}" y="${y0+ph-h}" width="${bw}" height="${h}" fill="#fff" stroke="#000" stroke-width=".6"/>`; });
+  return s+"</svg>";
+}
+function buildPrint(){
+  const {alpha}=getAge(), project=safeName($("project").value)||$("project").value.trim(), bname=bldgName().replace(/^예시:\s*/,"");
+  const f2=x=>x==null||typeof x!=="number"||!isFinite(x)?"#N/A":x.toFixed(2), f1=x=>x==null||!isFinite(x)?"#N/A":x.toFixed(1);
+  let html=""; const pages=Math.ceil(points.length/3);
+  for(let pg=0;pg<pages;pg++){
+    html+=`<div class="pv-page"><div class="pv-head">▣ 용역명 : ${esc(project)}${anvilVal()!==80?`<span style="font-weight:400;margin-left:8mm">※ 앤빌 보정 : R × 80 / ${anvilVal()}</span>`:""}</div>`;
+    for(let s=0;s<3;s++){ const k=pg*3+s; if(k>=points.length) break; const p=points[k], c=blockCache(p,alpha);
+      const hv=c.H.map(x=>typeof x==="number"?x:"(&nbsp;&nbsp;)");
+      const row=i=>hv.slice(i*4,i*4+4).map(x=>`<td>${x}</td>`).join("");
+      const pvc=q=>{ const k=CLS[q], on=c.cls===k, v=c.Nc?f1(c.Nc[k]):"#N/A"; return on?`<td><b>● ${k}</b></td><td><b>${v}</b></td><td>MPa</td>`:`<td>${k}</td><td>${v}</td><td>MPa</td>`; };
+      html+=`<table class="pv-blk"><colgroup><col style="width:11.6%"><col style="width:10.5%"><col style="width:7.8%"><col style="width:7.8%"><col style="width:7.8%"><col style="width:7.8%"><col style="width:13%"><col style="width:16.2%"><col style="width:8.5%"><col style="width:9%"></colgroup>
+        <tr><td colspan="2" class="lab">구&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;분</td><td colspan="4">타 격 값</td><td colspan="4">측정 Data Chart</td></tr>
+        <tr><td colspan="2" class="nm nb-b">${esc(bname)}</td>${row(0)}<td colspan="4" rowspan="5" class="chart">${barSvg(c.H.map(x=>typeof x==="number"?x:0))}</td></tr>
+        <tr><td colspan="2" class="big nb-t nb-b">${pad(k)}</td>${row(1)}</tr>
+        <tr><td colspan="2" class="big nb-t nb-b">${esc(p.floor)}</td>${row(2)}</tr>
+        <tr><td colspan="2" class="big nb-t nb-b">${esc(p.member)}${c.mo?` <span style="font-size:8pt">(${esc(p.moist)})</span>`:""}</td>${row(3)}</tr>
+        <tr><td class="lab nb-t nb-r">설계강도</td><td class="lab nb-t nb-l">${String(c.fck).padStart(2,"0")}MPa</td>${row(4)}</tr>
+        <tr><td colspan="2" class="lab">${c.mo?"각도·습윤 보정계수":"타격에 따른 보정계수"}</td><td class="nb-r">${ANGLE_XL[p.angle]}</td><td class="nb-l nb-r">(</td><td class="nb-l nb-r">${f2(c.Cm)}</td><td class="nb-l">)</td><td rowspan="3">추정 압축강도</td>${pvc(0)}</tr>
+        <tr><td colspan="2" class="lab">타격 평균값</td><td class="nb-r">${f2(c.havgA)}</td><td class="nb-l nb-r">${f2(c.Cm)}</td><td class="nb-l nb-r">=</td><td class="nb-l">${f2(c.K)}</td>${pvc(1)}</tr>
+        <tr><td colspan="2" class="lab">재령에 따른 보정치</td><td colspan="4">${f2(c.a)}</td>${pvc(2)}</tr></table>`;
+    }
+    html+=`</div>`;
+  }
+  $("printView").innerHTML=html;
+}
+$("btnPrint").addEventListener("click",()=>{ if(!checkReady()) return; buildPrint();
+  if(host()==="android"){ window.AndroidBridge.print((safeName($("project").value)||"반발경도")+"_반발경도시험"); return; }
+  if(inFrame) toast("미리보기 화면에서는 인쇄가 막혀 있습니다. 프로그램(HTML 파일)에서 실행하세요."); window.print(); });
+window.addEventListener("beforeprint",buildPrint);
+
+// ── 참고표 ──
+(function(){
+  const rs=[10,15,20,25,30,35,40,45,50];
+  $("angleRef").innerHTML=`<table><thead><tr><th>R</th>${["90","45","-45","-90"].map(a=>`<th>${ANGLE_SHORT[a]}</th>`).join("")}</tr></thead><tbody>${rs.map(r=>`<tr><td class="n">${r}</td>${["90","45","-45","-90"].map(a=>`<td class="n">${ANG[r][a]==null?"–":fmtS(ANG[r][a])}</td>`).join("")}</tr>`).join("")}</tbody></table><div class="hint" style="padding:6px 2px">타격각도 보정치 ΔR (5 단위 발췌, 계산은 1 단위 엑셀 값 사용)</div>`;
+  const rows=[]; for(let k=0;k<AGE.length;k+=10) rows.push(AGE.slice(k,k+10));
+  $("ageRef").innerHTML=`<table><tbody>${rows.map(rw=>`<tr><th>재령(일)</th>${rw.map(a=>`<td class="n">${a[0]}</td>`).join("")}</tr><tr><th>α</th>${rw.map(a=>`<td class="n">${a[1].toFixed(2)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+})();
+const dl=document.createElement("datalist"); dl.id="memberList";
+dl.innerHTML=["WALL","SLAB","COLUMN","BEAM","GIRDER","GIRTH","STAIR","FOOTING","MAT"].map(m=>`<option value="${m}">`).join(""); document.body.appendChild(dl);
+
+/* ════════════════ 앱 화면 (B안 블루프린트 다크) ════════════════
+   안드로이드 앱, 휴대폰 폭(640px 미만)에서 사용. 계산·저장·출력은 위의 같은 함수를 그대로 씀 */
+var MOBILE=false, mCur=0, mBuiltFor=null, mBuiltLen=-1;
+const mIcon=(d)=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+function mShell(){
+  const m=$("mApp");
+  m.innerHTML=`
+  <header class="m-head">
+    <div style="min-width:0;display:flex;flex-direction:column">
+      <span class="m-eyebrow">GOENG · SCHMIDT NR</span>
+      <h1 class="m-title">반발경도 강도산정</h1>
+      <button class="m-proj" id="mProj" type="button"></button>
+    </div>
+    <button class="m-iconbtn" id="mMenuBtn" type="button" aria-label="파일 메뉴">${mIcon('<path d="M4 4h11l5 5v11H4z"/><path d="M8 13h8M8 17h5"/>')}</button>
+  </header>
+  <button class="m-strip" id="mStrip" type="button" aria-label="공통 조건 바꾸기">
+    <span><small>준공</small><b id="mY">–</b></span><span><small>재령</small><b id="mD">–</b></span><span><small>α</small><b id="mA" style="color:var(--m-acc)">–</b></span><span><small>fck</small><b id="mF">–</b></span>
+  </button>
+  <div class="m-body">
+    <section class="m-card" id="mCard" aria-live="polite"></section>
+    <div class="m-dots" id="mDots" aria-hidden="true"></div>
+    <div class="m-nav"><button class="m-btn" id="mPrev" type="button">◀ 이전</button><span>밀어서 넘기기</span><button class="m-btn" id="mNext" type="button">다음 ▶</button></div>
+  </div>
+  <footer class="m-foot"><button class="m-btn" id="mAdd" type="button">+ 측정점</button><button class="m-btn pri" id="mXlsx" type="button">엑셀 출력</button></footer>
+
+  <div class="m-sheet" id="mSheetMenu" hidden><div role="dialog" aria-label="파일 메뉴">
+    <h2>파일 · 출력</h2>
+    <div class="m-menu">
+      <button class="m-btn" type="button" data-m="new">새로 만들기</button>
+      <button class="m-btn" type="button" data-m="open">불러오기</button>
+      <button class="m-btn" type="button" data-m="save">저장</button>
+      <button class="m-btn" type="button" data-m="saveas">다른 이름으로 저장</button>
+      <button class="m-btn" type="button" data-m="list">측정점 목록</button>
+      <button class="m-btn" type="button" data-m="cond">프로젝트 · 조건</button>
+      <button class="m-btn" type="button" data-m="print">인쇄 (A4 · 3개/쪽)</button>
+      <button class="m-btn" type="button" data-m="admin" id="mAdminBtn">관리자 모드</button>
+    </div>
+    <div style="font-size:12px;color:var(--m-muted)">작업 파일 : <span id="mFile"></span></div>
+    <div style="font-size:11.5px;color:var(--m-muted)">(주)지오 엔지니어링 · 제작 YG · yungi1013@naver.com · <span id="mVer"></span></div>
+    <button class="m-btn" type="button" data-close>닫기</button>
+  </div></div>
+
+  <div class="m-sheet" id="mSheetCond" hidden><div role="dialog" aria-label="프로젝트와 공통 조건">
+    <h2>프로젝트 · 공통 조건</h2>
+    <div class="m-form">
+      <label class="wide">프로젝트명 (용역명)<input class="m-in" data-mirror="project"></label>
+      <label class="wide">구분란 표기 (건물명)<input class="m-in" data-mirror="bldg" placeholder="비우면 프로젝트명"></label>
+      <label>측정일<input class="m-in" type="date" data-mirror="measDate"></label>
+      <label>준공연도<input class="m-in" type="number" inputmode="numeric" data-mirror="compYear"></label>
+      <label>준공 월<input class="m-in" type="number" inputmode="numeric" data-mirror="compMonth"></label>
+      <label>준공 일<input class="m-in" type="number" inputmode="numeric" data-mirror="compDay"></label>
+      <label class="wide">앤빌 보정값 (기준 80 · R × 80 / 앤빌값)<input class="m-in" type="number" inputmode="decimal" data-mirror="anvil"></label>
+      <label class="wide">새 측정점 기본 설계강도 (MPa)<input class="m-in" type="number" inputmode="numeric" data-mirror="defFck"></label>
+    </div>
+    <button class="m-btn pri" type="button" data-close>완료</button>
+  </div></div>
+
+  <div class="m-sheet" id="mSheetList" hidden><div role="dialog" aria-label="측정점 목록">
+    <h2>측정점 목록</h2>
+    <div style="overflow-x:auto"><table class="m-list"><thead><tr><th>번호</th><th>층 · 부재</th><th>방향</th><th style="text-align:right">MPa</th><th>등급</th></tr></thead><tbody id="mListBody"></tbody></table></div>
+    <div id="mListSum" style="font-family:var(--m-num);font-size:12.5px;color:var(--m-muted)"></div>
+    <button class="m-btn" type="button" data-close>닫기</button>
+  </div></div>
+
+  <div class="m-sheet" id="mSheetNew" hidden><div role="dialog" aria-label="새로 만들기 확인">
+    <h2>새로 만들까요?</h2>
+    <div style="font-size:13px;color:var(--m-muted)">저장하지 않은 변경사항은 사라집니다.</div>
+    <div class="m-menu"><button class="m-btn" type="button" data-close>취소</button><button class="m-btn pri" type="button" id="mNewYes">새로 만들기</button></div>
+  </div></div>`;
+}
+function mBuild(){
+  const p=points[mCur], i=mCur, angle=p.angle;
+  $("mCard").innerHTML=`
+    <div class="m-row"><span class="m-no">${pad(i)}</span><button class="m-pos" id="mPos" type="button" aria-label="측정점 목록 열기"></button></div>
+    <div class="m-hero"><span id="mWoo" class="m-angpic">${SVG(angle,"mw")}</span>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:11px;color:var(--m-muted)" id="mClsLbl">추정 압축강도</span><span class="m-big" id="mBig">–</span><span class="m-verdict" id="mVerdict"></span></div></div>
+    <div class="m-fields">
+      <label>층 *<input class="m-in" id="mFl" data-k="floor" value="${esc(p.floor)}" placeholder="3F"></label>
+      <label>부재 *<input class="m-in" id="mMb" data-k="member" list="memberList" value="${esc(p.member)}" placeholder="WALL"></label>
+      <label>설계강도<input class="m-in" id="mFc" data-k="fck" type="number" inputmode="numeric" value="${esc(p.fck)}"></label>
+    </div>
+    <div class="m-angles" role="group" aria-label="타격각도">
+      <button type="button" class="m-ang" data-angle="0">수평 0°</button>
+      <button type="button" class="m-ang" data-angle="90">아래→위 +90°</button>
+      <button type="button" class="m-ang" data-angle="-90">위→아래 −90°</button>
+    </div>
+    <div class="m-slant">경사 타격 <button type="button" class="m-chip" data-angle="45">+45°</button><button type="button" class="m-chip" data-angle="-45">−45°</button></div>
+    <div class="m-angles" role="group" aria-label="강도 추정식">${CLS.map(k=>`<button type="button" class="m-ang" data-cls="${k}">${k}</button>`).join("")}</div>
+    <div class="m-angles" role="group" aria-label="측정면 상태">${Object.keys(MOIST).map(k=>`<button type="button" class="m-ang" data-moist="${k}">${MOIST_LABEL[k]}</button>`).join("")}</div>
+    <div class="m-grid">${p.v.map((x,j)=>`<input id="mv${j}" data-j="${j}" inputmode="decimal" value="${esc(x)}" aria-label="타격값 ${j+1}">`).join("")}</div>
+    <div class="m-gen"><input class="m-in" id="mGm" data-k="genMean" type="number" inputmode="decimal" step="0.05" value="${esc(p.genMean)}" placeholder="평균값 (예: 44.8)" aria-label="평균값으로 채우기"><input class="m-in sm" id="mGs" data-k="genSpread" type="number" inputmode="numeric" value="${esc(p.genSpread||"4")}" aria-label="편차"><button class="m-btn" type="button" id="mGen">${p.gen?"다시":"채우기"}</button></div>
+    <div class="m-steps" id="mSteps"></div>
+    <div id="mWarns" style="display:flex;flex-direction:column;gap:6px"></div>
+    ${points.length>1?`<button class="m-btn" type="button" id="mDel" style="color:var(--m-bad)">이 측정점 삭제</button>`:""}`;
+  mBuiltFor=p; mBuiltLen=points.length;
+}
+function mUpdate(){
+  if(!MOBILE) return;
+  if(mCur>=points.length) mCur=points.length-1;
+  if(mBuiltFor!==points[mCur]||mBuiltLen!==points.length) mBuild();
+  const p=points[mCur], r=lastResults[mCur]||{}, {days,alpha}=getAge();
+  $("mProj").textContent=($("project").value||"프로젝트명 입력")+" ▸";
+  $("mY").textContent=$("compYear").value||"–"; $("mD").textContent=days==null?"–":days+"d"; $("mA").textContent=alpha==null?"–":alpha.toFixed(2); $("mF").textContent=p.fck||"–";
+  $("mPos").textContent=`${p.floor||"층?"} · ${p.member||"부재?"} · ${mCur+1} / ${points.length}`;
+  if($("mWoo").dataset.a!==p.angle){ $("mWoo").innerHTML=SVG(p.angle,"mw"+p.angle.replace("-","m")); $("mWoo").dataset.a=p.angle; }
+  $("mClsLbl").textContent=`추정 압축강도 · ${r.cls||p.cls||"일반"}`;
+  $("mBig").innerHTML=r.F!=null?`${r.F.toFixed(1)}<small> MPa</small>`:`–<small> MPa</small>`;
+  const v=$("mVerdict");
+  if(r.ratio!=null){ v.textContent=`강도비 ${r.ratio.toFixed(0)}% · ${r.grade}등급 · ${r.eval}`; v.style.color=r.grade==="a"?"var(--m-ok)":r.grade==="c"?"var(--m-warn)":"var(--m-bad)"; }
+  else { v.textContent=r.n?"준공연도 · 측정일을 확인하세요":"타격값을 입력하세요"; v.style.color="var(--m-muted)"; }
+  document.querySelectorAll("#mCard [data-angle]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.angle===p.angle)));
+  document.querySelectorAll("#mCard [data-cls]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.cls===(p.cls||"일반"))));
+  document.querySelectorAll("#mCard [data-moist]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.moist===(p.moist||"기건"))));
+  $("mFl").classList.toggle("need",!p.floor.trim()); $("mMb").classList.toggle("need",!p.member.trim());
+  p.v.forEach((x,j)=>{ const n=Number(x), el=$("mv"+j); if(el) el.classList.toggle("out",x!==""&&isFinite(n)&&r.lo!=null&&!(n>r.lo&&n<r.hi)); });
+  $("mSteps").innerHTML=r.n?`
+    <div><span>R 유효평균 (${r.kept}/${r.n})</span><b>${fmt(r.R,2)}</b></div>
+    <div><span>R′ 앤빌보정 (×80/${r.anvil})</span><b>${fmt(r.Ra,2)}</b></div>
+    <div><span>ΔR 각도보정 · ${ANGLE_SHORT[p.angle]}</span><b>${r.dR==null?"–":fmtS(r.dR)}</b></div>
+    <div><span>습윤보정 · ${p.moist||"기건"}</span><b>${fmtS(r.mo,0)}</b></div>
+    <div><span>R₀ 보정 반발경도</span><b>${fmt(r.Ro,2)}</b></div>
+    <div><span>일반 / 고강도 / 초고강도</span><b>${r.Fc?CLS.map(k=>k===r.cls?"["+fmt(r.Fc[k],2)+"]":fmt(r.Fc[k],2)).join(" / "):"–"}</b></div>`:"";
+  $("mWarns").innerHTML=(r.warns||[]).map(w=>`<div class="m-warn">${esc(w)}</div>`).join("");
+  $("mDots").innerHTML=points.length<=12?points.map((_,i)=>`<span class="${i===mCur?"on":""}"></span>`).join(""):"";
+  $("mPrev").disabled=mCur===0; $("mNext").disabled=mCur===points.length-1;
+  $("mPrev").style.opacity=mCur===0?.35:1; $("mNext").style.opacity=mCur===points.length-1?.35:1;
+  const pages=Math.ceil(points.length/3);
+  $("mXlsx").textContent=`엑셀 출력 · ${pages}쪽${ADMIN?" (수식)":""}`;
+  $("mAdminBtn").textContent=ADMIN?"관리자 모드 켜짐":"관리자 모드"; $("mAdminBtn").classList.toggle("m-admin",ADMIN);
+  $("mFile").textContent=(fileName||"저장 안 한 새 프로젝트")+(dirty?" · 저장 안 됨":"");
+}
+function mGo(i){ const n=Math.max(0,Math.min(points.length-1,i)); if(n===mCur) return; mCur=n; mBuild(); mUpdate(); window.scrollTo(0,0); }
+function mOpen(id){ document.querySelectorAll("#mApp .m-sheet").forEach(s=>s.hidden=s.id!==id); }
+function mCloseAll(){ document.querySelectorAll("#mApp .m-sheet").forEach(s=>s.hidden=true); }
+function mList(){
+  const {alpha}=getAge(); const Fr=[];
+  $("mListBody").innerHTML=points.map((p,i)=>{ const r=lastResults[i]||{}; if(r.F!=null) Fr.push(Math.round(r.F*10)/10);
+    return `<tr data-go="${i}" class="${i===mCur?"cur":""}" style="cursor:pointer"><td>${pad(i)}</td><td>${esc(p.floor)} · ${esc(p.member)}</td><td>${ANGLE_SHORT[p.angle].split(" ")[1]}</td><td class="n">${fmt(r.F)}</td><td>${r.grade||"–"}</td></tr>`; }).join("");
+  $("mListSum").textContent=Fr.length?`평균 ${(Fr.reduce((a,b)=>a+b,0)/Fr.length).toFixed(1)} · 최소 ${Math.min(...Fr).toFixed(1)} MPa · 출력 ${Math.ceil(points.length/3)}쪽`:"";
+}
+function mInit(){
+  MOBILE=true; document.body.classList.add("mobile"); mShell(); $("mVer").textContent=`v${APP_VER} (${APP_BUILD})`;
+  const card=$("mCard");
+  card.addEventListener("input",e=>{ const t=e.target, p=points[mCur];
+    if(t.dataset.j!=null){ p.v[+t.dataset.j]=t.value.trim(); if(p.gen){ p.gen=false; const g=$("mGen"); if(g) g.textContent="채우기"; } changed(); return; }
+    if(t.dataset.k){ p[t.dataset.k]=t.value; if(t.dataset.k==="genMean"||t.dataset.k==="genSpread"){ setDirty(true); autosave(); return; } changed(); } });
+  card.addEventListener("paste",e=>{ const t=e.target; if(t.dataset.j==null) return;
+    const nums=(e.clipboardData||window.clipboardData).getData("text").split(/[\s,;]+/).filter(x=>x!==""); if(nums.length<2) return; e.preventDefault();
+    let j=+t.dataset.j; nums.forEach(n=>{ if(j<20){ points[mCur].v[j]=n.replace(/[()]/g,""); $("mv"+j).value=points[mCur].v[j]; j++; } }); changed(); });
+  card.addEventListener("keydown",e=>{ if(e.key!=="Enter") return; const t=e.target;
+    if(t.id==="mGm"||t.id==="mGs"){ e.preventDefault(); $("mGen").click(); return; }
+    if(t.dataset.j!=null){ e.preventDefault(); const nx=$("mv"+(+t.dataset.j+1)); if(nx){ nx.focus(); nx.select(); } else t.blur(); } });
+  let delArm=false;
+  card.addEventListener("click",e=>{ const b=e.target.closest("button"); if(!b) return; const p=points[mCur];
+    if(b.dataset.angle!=null){ p.angle=b.dataset.angle; changed(); return; }
+    if(b.dataset.moist!=null){ p.moist=b.dataset.moist; changed(); return; }
+    if(b.dataset.cls!=null){ p.cls=b.dataset.cls; changed(); return; }
+    if(b.id==="mPos"){ mList(); mOpen("mSheetList"); return; }
+    if(b.id==="mGen"){ const m=parseFloat(p.genMean); if(!(m>=10&&m<=70)){ toast("평균값을 10~70 사이로 입력하세요"); $("mGm").focus(); return; }
+      const {v,s}=genValues(m,parseFloat(p.genSpread)||4); p.v=v.map(String); p.gen=true; p.genSpread=String(s); mBuild(); renderCards(); changed();
+      toast(`${pad(mCur)} 타격값 20개를 채웠습니다 (평균 ${(v.reduce((a,b)=>a+b,0)/20).toFixed(2)})`); return; }
+    if(b.id==="mDel"){ if(!delArm){ delArm=true; b.textContent="한 번 더 누르면 삭제"; setTimeout(()=>{ delArm=false; if(b.isConnected) b.textContent="이 측정점 삭제"; },2500); return; }
+      delArm=false; points.splice(mCur,1); mCur=Math.min(mCur,points.length-1); renderCards(); mBuild(); changed(); toast("측정점을 삭제하고 번호를 다시 매겼습니다"); }
+  });
+  let sx=0, sy=0, st=0;
+  card.addEventListener("touchstart",e=>{ const t=e.touches[0]; sx=t.clientX; sy=t.clientY; st=Date.now(); },{passive:true});
+  card.addEventListener("touchend",e=>{ const t=e.changedTouches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(Date.now()-st<700&&Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*1.6) mGo(mCur+(dx<0?1:-1)); },{passive:true});
+  $("mPrev").addEventListener("click",()=>mGo(mCur-1)); $("mNext").addEventListener("click",()=>mGo(mCur+1));
+  $("mAdd").addEventListener("click",()=>{ $("btnAdd").click(); mCur=points.length-1; mBuild(); mUpdate(); window.scrollTo(0,0); $("mFl").focus(); });
+  $("mXlsx").addEventListener("click",()=>$("btnXlsx").click());
+  $("mMenuBtn").addEventListener("click",()=>{ mUpdate(); mOpen("mSheetMenu"); });
+  const condOpen=()=>{ document.querySelectorAll("#mSheetCond [data-mirror]").forEach(x=>x.value=$(x.dataset.mirror).value); mOpen("mSheetCond"); };
+  $("mStrip").addEventListener("click",condOpen); $("mProj").addEventListener("click",condOpen);
+  $("mSheetCond").addEventListener("input",e=>{ const t=e.target; if(!t.dataset.mirror) return; const d=$(t.dataset.mirror); d.value=t.value; d.dispatchEvent(new Event("input",{bubbles:true})); });
+  $("mApp").addEventListener("click",async e=>{
+    const sh=e.target.closest(".m-sheet"); if(sh&&e.target===sh){ mCloseAll(); return; }
+    if(e.target.closest("[data-close]")){ mCloseAll(); return; }
+    const row=e.target.closest("[data-go]"); if(row){ mCloseAll(); mGo(+row.dataset.go); return; }
+    const b=e.target.closest("[data-m]"); if(!b) return; const act=b.dataset.m;
+    if(act==="new"){ mOpen("mSheetNew"); return; }
+    mCloseAll();
+    if(act==="open"){ if(dirty) toast("저장하지 않은 변경사항이 있으면 먼저 저장하세요"); await openFile(); }
+    else if(act==="save") await save();
+    else if(act==="saveas") await saveAs();
+    else if(act==="list"){ mList(); mOpen("mSheetList"); }
+    else if(act==="cond") condOpen();
+    else if(act==="print") $("btnPrint").click();
+    else if(act==="admin") $("btnAdmin").click();
+    mUpdate();
+  });
+  $("mNewYes").addEventListener("click",()=>{ mCloseAll(); load({measDate:todayStr(),defFck:"24",points:[]}); fileHandle=null; fileName=""; setDirty(false); autosave(); mCur=0; mBuild(); mUpdate(); });
+  document.addEventListener("adminchange",mUpdate);
+}
+if(host()==="android"||/(^|[#&])m(obile)?$/.test(location.hash.slice(1))||(window.innerWidth<640&&!window.pywebview)) mInit();
+
+let saved=null; try{ saved=JSON.parse(localStorage.getItem("goeng_rebound_v2")||"null"); }catch(e){}
+if(saved&&saved.points&&saved.points.length){ load(saved); fileName=saved._fileName||""; setDirty(!!saved._dirty); }
+else { load(JSON.parse(JSON.stringify(SAMPLE))); setDirty(false); }
+$("verLbl").textContent=`v${APP_VER} (${APP_BUILD})`;
+window.__app={calcPoint,genValues,buildXlsx,buildPrint};
+})();
+</script>
+<script>
+// 오프라인 사용 : 한 번 열면 인터넷 없이도 실행
+if("serviceWorker" in navigator && location.protocol==="https:") navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script>
+
